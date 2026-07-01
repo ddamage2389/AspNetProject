@@ -1,7 +1,7 @@
 ﻿
 using System.ComponentModel.DataAnnotations;
 
-namespace EventManager.Dtos;
+namespace AspNetProject.Dtos;
 
 public class CreateEventDto
 {

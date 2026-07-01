@@ -1,7 +1,7 @@
-﻿// Services/IEventService.cs
-using AspNetApi.Models;
+﻿
+using AspNetProject.Models;
 
-namespace EventManager.Services;
+namespace AspNetProject.Services;
 
 public interface IEventService
 {

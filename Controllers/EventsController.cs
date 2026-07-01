@@ -1,10 +1,9 @@
-﻿
-using AspNetApi.Models;
-using EventManager.Dtos;
-using EventManager.Services;
+﻿using AspNetProject.Models;
+using AspNetProject.Dtos;
+using AspNetProject.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventManager.Controllers;
+namespace AspNetProject.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -28,11 +27,7 @@ public class EventsController : ControllerBase
     public async Task<ActionResult<Event>> GetById(Guid id)
     {
         var eventItem = await _eventService.GetByIdAsync(id);
-
-        if (eventItem is null)
-            return NotFound(new { message = $"Событие с id {id} не найдено" });
-
-        return Ok(eventItem);
+        return eventItem == null ? NotFound() : Ok(eventItem);
     }
 
     [HttpPost]
@@ -54,7 +49,6 @@ public class EventsController : ControllerBase
         };
 
         var created = await _eventService.CreateAsync(eventItem);
-
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -68,28 +62,22 @@ public class EventsController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var existing = await _eventService.GetByIdAsync(id);
-        if (existing is null)
-            return NotFound(new { message = $"Событие с id {id} не найдено" });
+        var eventToUpdate = new Event
+        {
+            Title = dto.Title,
+            Description = dto.Description,
+            StartAt = dto.StartAt,
+            EndAt = dto.EndAt
+        };
 
-        existing.Title = dto.Title;
-        existing.Description = dto.Description;
-        existing.StartAt = dto.StartAt;
-        existing.EndAt = dto.EndAt;
-
-        await _eventService.UpdateAsync(id, existing);
-
-        return Ok(existing);
+        var updated = await _eventService.UpdateAsync(id, eventToUpdate);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var deleted = await _eventService.DeleteAsync(id);
-
-        if (!deleted)
-            return NotFound(new { message = $"Событие с id {id} не найдено" });
-
-        return NoContent();
+        return deleted ? NoContent() : NotFound();
     }
 }
