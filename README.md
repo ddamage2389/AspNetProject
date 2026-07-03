@@ -1,4 +1,4 @@
-## Event Manager API
+# Event Manager API
 
 Базовый REST API для управления мероприятиями, реализованный на ASP.NET Core Web API.
 
@@ -10,8 +10,8 @@
 
 ```bash
 # 1. Клонируйте репозиторий
-git clone https://github.com/ddamage2389/AspNetApi
-cd EventManager
+git clone https://github.com/ddamage2389/AspNetProject
+cd AspNetProject
 
 # 2. Соберите проект
 dotnet build
@@ -34,8 +34,44 @@ https://localhost:xxxx/swagger
 | `PUT` | `/api/events/{id}` | Обновить событие | `200`, `400`, `404` |
 | `DELETE` | `/api/events/{id}` | Удалить событие | `204`, `404` |
 
+Эндпоинт `GET /api/events` поддерживает параметры запроса:
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `title` | `string` | Поиск по названию (регистронезависимый, частичное совпадение) |
+| `from` | `DateTime` | События, начинающиеся не раньше указанной даты |
+| `to` | `DateTime` | События, заканчивающиеся не позже указанной даты |
+| `page` | `int` | Номер страницы (по умолчанию: `1`) |
+| `pageSize` | `int` | Количество элементов на странице (по умолчанию: `10`) |
+
+Пример запроса:
+GET /api/events?title=митап&from=2026-06-01T00:00:00&to=2026-06-30T23:59:59&page=1&pageSize=5
+
 ## Правила валидации
 - `title`, `startAt`, `endAt` — обязательные поля
 - `endAt` должен быть позже `startAt`
 
 Полная интерактивная документация: [Swagger UI](https://localhost:xxxx/swagger)
+
+## Обработка ошибок
+
+API использует глобальный middleware для перехвата исключений. Все ошибки возвращаются в едином формате Problem Details (RFC 7807):
+
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "Ошибка валидации",
+  "status": 400,
+  "detail": "Поле EndAt должно быть строго позже StartAt",
+  "traceId": "00-abc123def456..."
+}
+
+## Запуск тестов
+
+Проект включает набор юнит-тестов, написанных на xUnit с использованием FluentAssertions.
+Тесты находятся в в папке AspNetProject.Tests
+ 
+# Запуск тестов
+cd AspNetProject
+dotnet test
+
+Всего тестов: 13 | Статус: Все проходят успешно

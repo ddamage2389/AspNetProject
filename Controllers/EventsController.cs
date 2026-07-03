@@ -1,5 +1,6 @@
-﻿using AspNetProject.Models;
+﻿using AspNetApi.Dtos;
 using AspNetProject.Dtos;
+using AspNetProject.Models;
 using AspNetProject.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,10 +18,21 @@ public class EventsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Event>>> GetAll()
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<PaginatedResult<Event>>> GetAll(
+    [FromQuery] string? title = null,
+    [FromQuery] DateTime? from = null,
+    [FromQuery] DateTime? to = null,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 10)
     {
-        var events = await _eventService.GetAllAsync();
-        return Ok(events);
+        // Если pageSize слишком большой, можно ограничить (опционально)
+        if (pageSize > 100) pageSize = 100;
+        if (pageSize < 1) pageSize = 1;
+        if (page < 1) page = 1;
+
+        var result = await _eventService.GetAllAsync(title, from, to, page, pageSize);
+        return Ok(result);
     }
 
     [HttpGet("{id}")]
@@ -80,4 +92,13 @@ public class EventsController : ControllerBase
         var deleted = await _eventService.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpGet("test-error")]
+    public IActionResult TestError()
+    {
+        throw new Exception("Это тестовое исключение для проверки middleware");
+    }
 }
+
+
+
