@@ -49,6 +49,7 @@ https://localhost:xxxx/swagger
 **Пример запроса:**
 ```http
 GET /api/events?title=митап&from=2026-06-01T00:00:00&to=2026-06-30T23:59:59&page=1&pageSize=5
+```
 
 ## Правила валидации
 - `title`, `startAt`, `endAt` — обязательные поля
@@ -67,6 +68,7 @@ API использует глобальный middleware для перехват
   "detail": "Поле EndAt должно быть строго позже StartAt",
   "traceId": "00-abc123def456..."
 }
+```
 
 ## Фоновая обработка бронирований
 
