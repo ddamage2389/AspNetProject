@@ -1,4 +1,4 @@
-﻿namespace AspNetApi.Dtos;
+﻿namespace AspNetProject.Dtos;
 
 public class PaginatedResult<T>
 {

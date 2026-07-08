@@ -1,6 +1,6 @@
 ﻿
 using AspNetProject.Models;
-using AspNetApi.Dtos;
+using AspNetProject.Dtos;
 
 namespace AspNetProject.Services;
 

@@ -1,4 +1,4 @@
-﻿namespace AspNetApi.Middleware;
+﻿namespace AspNetProject.Middleware;
 
 public static class ExceptionHandlingMiddlewareExtensions
 {

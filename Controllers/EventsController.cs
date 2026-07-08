@@ -1,5 +1,4 @@
-﻿using AspNetApi.Dtos;
-using AspNetProject.Dtos;
+﻿using AspNetProject.Dtos;
 using AspNetProject.Models;
 using AspNetProject.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +10,12 @@ namespace AspNetProject.Controllers;
 public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
+    private readonly IBookingService _bookingService;
 
-    public EventsController(IEventService eventService)
+    public EventsController(IEventService eventService, IBookingService bookingService)
     {
         _eventService = eventService;
+        _bookingService = bookingService;
     }
 
     [HttpGet]
@@ -26,7 +27,6 @@ public class EventsController : ControllerBase
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 10)
     {
-        // Если pageSize слишком большой, можно ограничить (опционально)
         if (pageSize > 100) pageSize = 100;
         if (pageSize < 1) pageSize = 1;
         if (page < 1) page = 1;
@@ -97,6 +97,26 @@ public class EventsController : ControllerBase
     public IActionResult TestError()
     {
         throw new Exception("Это тестовое исключение для проверки middleware");
+    }
+
+    [HttpPost("{id}/book")]
+    public async Task<IActionResult> CreateBooking(Guid id)
+    {
+        try
+        {
+            var booking = await _bookingService.CreateBookingAsync(id);
+
+            // Возвращаем 202 Accepted с заголовком Location
+            return AcceptedAtAction(
+                nameof(BookingsController.GetBookingById),
+                "Bookings",
+                new { id = booking.Id },
+                booking);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 }
 
