@@ -95,7 +95,8 @@ API использует глобальный middleware для перехват
 Тесты находятся в в папке AspNetProject.Tests
  
 # Запуск тестов
+```bash
 cd AspNetProject
 dotnet test
-
+```
 Всего тестов: 20 | Статус: Все проходят успешно
