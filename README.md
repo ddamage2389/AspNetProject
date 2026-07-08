@@ -21,8 +21,7 @@ dotnet run
 
 # 4. Откройте Swagger UI
 https://localhost:xxxx/swagger
-
----
+```
 
 ## Краткая документация API
 
