@@ -18,4 +18,7 @@ public class UpdateEventDto
     public DateTime EndAt { get; set; }
 
     public bool IsValidDateRange() => EndAt > StartAt;
+
+    public int TotalSeats { get; set; }
+    public int AvailableSeats { get; set; }
 }

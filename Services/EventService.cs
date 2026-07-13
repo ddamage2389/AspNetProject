@@ -62,7 +62,6 @@ public class EventService : IEventService
     {
         lock (_lock)
         {
-            eventItem.Id = Guid.NewGuid();
             _events.Add(eventItem);
             return Task.FromResult(eventItem);
         }

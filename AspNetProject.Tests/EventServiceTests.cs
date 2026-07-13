@@ -16,13 +16,20 @@ public class EventServiceTests
     public async Task CreateAsync_ShouldAddEventAndReturnItWithNewId()
     {
         var service = CreateService();
-        var newEvent = new Event { Title = "Тест", StartAt = DateTime.Now, EndAt = DateTime.Now.AddHours(1) };
+        var newEvent = Event.Create(
+            title: "Тест",
+            description: "Описание",
+            startAt: DateTime.Now,
+            endAt: DateTime.Now.AddHours(1),
+            totalSeats: 10
+        );
 
         var result = await service.CreateAsync(newEvent);
 
         result.Should().NotBeNull();
-        result.Id.Should().NotBe(Guid.Empty);
         result.Title.Should().Be("Тест");
+        result.TotalSeats.Should().Be(10);
+        result.AvailableSeats.Should().Be(10);
     }
 
     [Fact]

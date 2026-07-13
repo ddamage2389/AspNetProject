@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-	  <ProjectReference Include="..\AspNetApi.csproj" />
+	  <ProjectReference Include="..\AspNetProject.csproj" />
   </ItemGroup>
 
 </Project>

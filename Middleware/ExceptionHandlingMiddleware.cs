@@ -44,6 +44,13 @@ public class ExceptionHandlingMiddleware
                 response.Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1";
                 break;
 
+            case AspNetProject.Exceptions.NoAvailableSeatsException:
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict; // 409
+                response.Title = "Нет свободных мест";
+                response.Detail = exception.Message;
+                response.Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8";
+                break;
+
             case KeyNotFoundException:
                 context.Response.StatusCode = (int)HttpStatusCode.NotFound;
                 response.Title = "Ресурс не найден";
