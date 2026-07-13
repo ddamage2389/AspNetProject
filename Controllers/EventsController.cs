@@ -52,13 +52,13 @@ public class EventsController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var eventItem = new Event
-        {
-            Title = dto.Title,
-            Description = dto.Description,
-            StartAt = dto.StartAt,
-            EndAt = dto.EndAt
-        };
+        var eventItem = Event.Create(
+            dto.Title,
+            dto.Description,
+            dto.StartAt,
+            dto.EndAt,
+            dto.TotalSeats
+        );
 
         var created = await _eventService.CreateAsync(eventItem);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
@@ -100,13 +100,15 @@ public class EventsController : ControllerBase
     }
 
     [HttpPost("{id}/book")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateBooking(Guid id)
     {
         try
         {
             var booking = await _bookingService.CreateBookingAsync(id);
 
-            // Возвращаем 202 Accepted с заголовком Location
             return AcceptedAtAction(
                 nameof(BookingsController.GetBookingById),
                 "Bookings",

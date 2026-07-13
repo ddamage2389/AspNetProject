@@ -18,8 +18,11 @@ public class CreateEventDto
     [Required(ErrorMessage = "Поле EndAt обязательно")]
     public DateTime EndAt { get; set; }
 
+    public int TotalSeats { get; set; }
+
     /// <summary>
     /// Дополнительная валидация: EndAt должен быть позже StartAt
     /// </summary>
     public bool IsValidDateRange() => EndAt > StartAt;
+
 }
