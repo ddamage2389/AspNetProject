@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 	<PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
 	<Compile Remove="AspNetProject.Tests\**" />
 	<EmbeddedResource Remove="AspNetProject.Tests\**" />
