@@ -163,8 +163,3 @@ docker compose -f docker-compose_.yml down -v
 
 ## Создание схемы БД
 При первом запуске приложения схема базы данных (таблицы events и bookings) создаётся автоматически через EnsureCreated().
-
-## Синхронизация и конкурентность
-В BookingService используется static SemaphoreSlim для защиты критической секции при создании брони (замена lock для асинхронной работы с EF Core).
-BookingProcessingBackgroundService использует IServiceScopeFactory для корректной работы со scoped-зависимостями (AppDbContext) внутри singleton-сервиса.
-Каждая задача обработки брони выполняется в отдельном scope, что обеспечивает изоляцию контекстов.
