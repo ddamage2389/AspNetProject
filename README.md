@@ -126,7 +126,8 @@ ReleaseSeats(int count) — возвращает места в пул (испо�
 
 Проект включает набор юнит-тестов, написанных на xUnit с использованием FluentAssertions.
 Тесты находятся в папке AspNetProject.Tests
- 
+Юнит-тесты используют InMemory-провайдер EF Core и не требуют подключения к реальной БД
+
 # Запуск тестов
 ```bash
 cd AspNetProject
@@ -134,3 +135,36 @@ dotnet test
 ```
 Всего тестов: 27 | Статус: Все проходят успешно
 
+##  База данных
+
+### Требования
+- Docker Desktop
+- PostgreSQL 16 (запускается через docker-compose)
+
+### Запуск базы данных
+```bash
+# Из корня проекта
+docker compose -f docker-compose_.yml up -d
+
+# Проверить статус
+docker ps
+# Должен быть контейнер eventapi-postgres со статусом Up (healthy)
+
+# Остановить базу
+docker compose -f docker-compose_.yml down -v
+
+## Настройка подключения
+Строка подключения находится в appsettings.json:
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Host=localhost;Port=5432;Database=eventapi;Username=postgres;Password=postgres"
+}
+```
+
+## Создание схемы БД
+При первом запуске приложения схема базы данных (таблицы events и bookings) создаётся автоматически через EnsureCreated().
+
+## Синхронизация и конкурентность
+В BookingService используется static SemaphoreSlim для защиты критической секции при создании брони (замена lock для асинхронной работы с EF Core).
+BookingProcessingBackgroundService использует IServiceScopeFactory для корректной работы со scoped-зависимостями (AppDbContext) внутри singleton-сервиса.
+Каждая задача обработки брони выполняется в отдельном scope, что обеспечивает изоляцию контекстов.

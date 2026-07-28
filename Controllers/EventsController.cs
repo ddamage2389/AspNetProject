@@ -69,20 +69,16 @@ public class EventsController : ControllerBase
     {
         if (!dto.IsValidDateRange())
         {
-            ModelState.AddModelError(nameof(dto.EndAt),
-                "Поле EndAt должно быть позже поля StartAt");
+            ModelState.AddModelError(nameof(dto.EndAt), "Поле EndAt должно быть позже поля StartAt");
             return BadRequest(ModelState);
         }
 
-        var eventToUpdate = new Event
-        {
-            Title = dto.Title,
-            Description = dto.Description,
-            StartAt = dto.StartAt,
-            EndAt = dto.EndAt
-        };
+        var existing = await _eventService.GetByIdAsync(id);
+        if (existing == null) return NotFound();
 
-        var updated = await _eventService.UpdateAsync(id, eventToUpdate);
+        existing.Update(dto.Title, dto.Description, dto.StartAt, dto.EndAt);
+
+        var updated = await _eventService.UpdateAsync(id, existing);
         return updated == null ? NotFound() : Ok(updated);
     }
 

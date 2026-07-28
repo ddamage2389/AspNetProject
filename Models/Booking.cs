@@ -1,12 +1,18 @@
 ﻿namespace AspNetProject.Models;
 
-public class Booking
+public sealed class Booking
 {
+    private Booking()
+    {
+    }
+
     public Guid Id { get; set; }
     public Guid EventId { get; set; }
     public BookingStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
+
+    internal Event? Event { get; private set; }
 
     public static Booking CreatePending(Guid eventId)
     {

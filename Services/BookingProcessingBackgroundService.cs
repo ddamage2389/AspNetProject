@@ -1,6 +1,6 @@
 ﻿using AspNetProject.DataAccess;
 using AspNetProject.Models;
-using AspNetProject.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -8,19 +8,14 @@ namespace AspNetProject.Services;
 
 public class BookingProcessingBackgroundService : BackgroundService
 {
-    private readonly InMemoryBookingStore _bookingStore;
-    private readonly IEventService _eventService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<BookingProcessingBackgroundService> _logger;
 
-    private readonly SemaphoreSlim _processingSemaphore = new(1, 1);
-
     public BookingProcessingBackgroundService(
-        InMemoryBookingStore bookingStore,
-        IEventService eventService,
+        IServiceScopeFactory scopeFactory,
         ILogger<BookingProcessingBackgroundService> logger)
     {
-        _bookingStore = bookingStore;
-        _eventService = eventService;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -30,88 +25,81 @@ public class BookingProcessingBackgroundService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // 1. Получаем список броней со статусом Pending
-            // .ToList() создает копию списка, чтобы избежать ошибок при изменении коллекции
-            var pendingBookings = _bookingStore.GetByStatus(BookingStatus.Pending).ToList();
+            List<Guid> pendingBookingIds;
 
-            if (pendingBookings.Any())
+            // 1. Создаём scope, получаем DbContext и забираем ID pending-бронирований
+            using (var scope = _scopeFactory.CreateScope())
             {
-                _logger.LogInformation("Найдено {Count} броней для обработки.", pendingBookings.Count);
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                pendingBookingIds = await db.Bookings
+                    .Where(b => b.Status == BookingStatus.Pending)
+                    .Select(b => b.Id)
+                    .ToListAsync(stoppingToken);
+            } // ✅ Scope закрывается, DbContext утилизируется
 
-                // 2. ЗАПУСКАЕМ ОБРАБОТКУ ПАРАЛЛЕЛЬНО
-                // Создаем задачу для каждой брони
-                var tasks = pendingBookings.Select(booking => ProcessBookingAsync(booking, stoppingToken));
+            if (pendingBookingIds.Any())
+            {
+                _logger.LogInformation("Найдено {Count} броней для обработки.", pendingBookingIds.Count);
 
-                // Ждем завершения задач
+                // 2. Запускаем обработку параллельно
+                var tasks = pendingBookingIds.Select(id => ProcessBookingAsync(id, stoppingToken));
                 await Task.WhenAll(tasks);
             }
 
-            // 3. Ждем 5 секунд перед следующей проверкой (Polling Interval)
+            // 3. Пауза перед следующей проверкой
             await Task.Delay(5000, stoppingToken);
         }
     }
 
-    // 🔹 Логика обработки брони
-    private async Task ProcessBookingAsync(Booking booking, CancellationToken stoppingToken)
+    private async Task ProcessBookingAsync(Guid bookingId, CancellationToken stoppingToken)
     {
         try
         {
-            // Имитация внешней операции (2 секунды)
+            // ⏳ Имитация внешней операции (выполняется ДО создания scope → параллельно для всех задач)
             await Task.Delay(2000, stoppingToken);
 
-            await _processingSemaphore.WaitAsync(stoppingToken);
+            // 📦 Каждая задача получает свой изолированный DbContext
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            try
+            var booking = await db.Bookings.FindAsync(bookingId);
+            if (booking == null) return; // Уже обработана или удалена
+
+            var eventItem = await db.Events.FindAsync(booking.EventId);
+
+            if (eventItem == null)
             {
-                // Проверяем, существует ли событие
-                var @event = await _eventService.GetByIdAsync(booking.EventId);
-
-                if (@event == null)
-                {
-                    // События нет
-                    _logger.LogWarning("Бронь {BookingId} отклонена: событие {EventId} не найдено.", booking.Id, booking.EventId);
-                    booking.Reject();
-                    _bookingStore.Update(booking);
-                }
-                else
-                {
-                    // Событие есть
-                    booking.Confirm();
-                    _bookingStore.Update(booking);
-                    _logger.LogInformation("Бронь {BookingId} успешно подтверждена.", booking.Id);
-                }
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка при обработке брони {BookingId}", booking.Id);
-
                 booking.Reject();
-
-                // Пытаемся вернуть места, если событие доступно
-                try
-                {
-                    var @event = await _eventService.GetByIdAsync(booking.EventId);
-                    if (@event != null)
-                    {
-                        @event.ReleaseSeats();
-                        // Сохраняем изменения в событии (возврат мест)
-                        await _eventService.UpdateAsync(@event.Id, @event);
-                    }
-                }
-                catch { /* Игнорируем ошибки при возврате мест */ }
-
-                // Сохраняем отклоненную бронь
-                _bookingStore.Update(booking);
+                await db.SaveChangesAsync(stoppingToken);
+                _logger.LogWarning("Бронь {BookingId} отклонена: событие не найдено.", bookingId);
             }
-            finally
+            else
             {
-                _processingSemaphore.Release();
+                booking.Confirm();
+                await db.SaveChangesAsync(stoppingToken);
+                _logger.LogInformation("Бронь {BookingId} успешно подтверждена.", bookingId);
             }
         }
         catch (OperationCanceledException)
         {
+            // Нормальное завершение при остановке приложения
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при обработке брони {BookingId}", bookingId);
 
+            // 🚨 При ошибке отклоняем бронь и возвращаем места
+            using var errorScope = _scopeFactory.CreateScope();
+            var db = errorScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var booking = await db.Bookings.FindAsync(bookingId);
+            if (booking != null)
+            {
+                booking.Reject();
+                var eventItem = await db.Events.FindAsync(booking.EventId);
+                eventItem?.ReleaseSeats();
+                await db.SaveChangesAsync(stoppingToken);
+            }
         }
     }
 }

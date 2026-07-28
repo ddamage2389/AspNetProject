@@ -1,14 +1,23 @@
 ﻿namespace AspNetProject.Models;
 
-public class Event
+public sealed class Event
 {
+    private Event()
+    {
+        Title = string.Empty; // Инициализация required поля
+        Bookings = new List<Booking>(); // Инициализация коллекции
+    }
+
     public Guid Id { get; set; }
     public required string Title { get; set; }
     public string? Description { get; set; }
     public DateTime StartAt { get; set; }
     public DateTime EndAt { get; set; }
+
     public int TotalSeats { get; private set; }
     public int AvailableSeats { get; private set; }
+
+    internal  ICollection<Booking> Bookings { get; private set; }
 
     /// <summary>
     /// Фабричный метод с валидацией
@@ -32,7 +41,7 @@ public class Event
             StartAt = startAt,
             EndAt = endAt,
             TotalSeats = totalSeats,
-            AvailableSeats = totalSeats 
+            AvailableSeats = totalSeats
         };
     }
 
@@ -59,5 +68,13 @@ public class Event
         if (AvailableSeats > TotalSeats)
             AvailableSeats = TotalSeats;
     }
+    public void Update(string title, string? description, DateTime startAt, DateTime endAt)
+    {
+        Title = title;
+        Description = description;
+        StartAt = startAt;
+        EndAt = endAt;
+    }
+
 }
 
