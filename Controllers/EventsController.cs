@@ -63,7 +63,7 @@ public class EventsController : ControllerBase
         var created = await _eventService.CreateAsync(eventItem);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
-
+     
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateEventDto dto)
     {
