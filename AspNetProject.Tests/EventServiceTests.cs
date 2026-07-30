@@ -1,6 +1,7 @@
 ﻿using AspNetProject.DataAccess;
 using AspNetProject.Exceptions;
 using AspNetProject.Models;
+using AspNetProject.Repositories;
 using AspNetProject.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ public class EventServiceTests : IDisposable
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase(_dbName));
 
+        services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IEventService, EventService>();
 
         _serviceProvider = services.BuildServiceProvider();

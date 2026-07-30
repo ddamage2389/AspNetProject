@@ -10,14 +10,34 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 	<PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
 	<Compile Remove="AspNetProject.Tests\**" />
 	<EmbeddedResource Remove="AspNetProject.Tests\**" />
 	<None Remove="AspNetProject.Tests\**" />
+
+	<Compile Remove="AspNetProject.IntegrationTests\**" />
+	<EmbeddedResource Remove="AspNetProject.IntegrationTests\**" />
+	<None Remove="AspNetProject.IntegrationTests\**" />
   </ItemGroup>
 
 	<ItemGroup>
+		<Content Remove="AspNetProject.Tests\**" />
+		<Content Remove="AspNetProject.IntegrationTests\**" />
+		<Compile Remove="bin\**" />
+		<Compile Remove="obj\**" />
+		<None Remove="bin\**" />
+		<None Remove="obj\**" />
+		<Content Remove="bin\**" />
+		<Content Remove="obj\**" />
+	</ItemGroup>
+	
+	<ItemGroup>
 		<InternalsVisibleTo Include="AspNetProject.Tests" />
+		<InternalsVisibleTo Include="AspNetProject.IntegrationTests" />
 	</ItemGroup>
 </Project>

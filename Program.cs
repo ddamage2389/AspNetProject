@@ -1,8 +1,10 @@
 
 using AspNetProject.DataAccess;
 using AspNetProject.Middleware;
+using AspNetProject.Repositories;
 using AspNetProject.Services;
 using Microsoft.EntityFrameworkCore;
+using AspNetProject.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +21,11 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddScoped<IEventRepository, EventRepository>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 
 var app = builder.Build();
@@ -28,7 +33,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 app.UseExceptionHandling();

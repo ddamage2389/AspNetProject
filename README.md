@@ -16,10 +16,13 @@ cd AspNetProject
 # 2. Соберите проект
 dotnet build
 
-# 3. Запустите сервер
+# 3. Запустите локальную базу данных 
+docker compose -f docker-compose_.yml up -d
+
+# 4. Запустите сервер
 dotnet run
 
-# 4. Откройте Swagger UI
+# 5. Откройте Swagger UI
 https://localhost:xxxx/swagger
 ```
 
@@ -124,16 +127,17 @@ ReleaseSeats(int count) — возвращает места в пул (испо�
 
 ## Запуск тестов
 
-Проект включает набор юнит-тестов, написанных на xUnit с использованием FluentAssertions.
-Тесты находятся в папке AspNetProject.Tests
-Юнит-тесты используют InMemory-провайдер EF Core и не требуют подключения к реальной БД
+Проект включает набор тестов, написанных на xUnit с использованием FluentAssertions.
+Проект покрыт двумя типами тестов:
+1)Юнит-тесты (AspNetProject.Tests): Тестируют бизнес-логику с использованием In-Memory базы данных.
+2)Интеграционные тесты (AspNetProject.IntegrationTests): Тестируют слой доступа к данным (репозитории) на реальной базе данных PostgreSQL, которая автоматически поднимается в Docker-контейнере с помощью библиотеки Testcontainers.
 
 # Запуск тестов
 ```bash
 cd AspNetProject
 dotnet test
 ```
-Всего тестов: 27 | Статус: Все проходят успешно
+Всего тестов: 32 | Статус: Все проходят успешно
 
 ##  База данных
 
@@ -161,5 +165,15 @@ docker compose -f docker-compose_.yml down -v
 }
 ```
 
-## Создание схемы БД
-При первом запуске приложения схема базы данных (таблицы events и bookings) создаётся автоматически через EnsureCreated().
+## Управление базой данных (Миграции EF Core)
+Схема базы данных управляется исключительно через миграции Entity Framework Core.
+Создание новой миграции (при изменении моделей):
+```bash
+dotnet ef migrations add <ИмяМиграции> --project AspNetProject --startup-project AspNetProject
+```
+При запуске приложения (dotnet run) миграции применяются автоматически через db.Database.Migrate().
+
+## Архитектура и слой доступа к данным
+В проекте реализован паттерн Репозиторий для инкапсуляции логики работы с базой данных. Сервисы (EventService, BookingService) не обращаются к AppDbContext напрямую, а взаимодействуют только через интерфейсы:
+- IEventRepository / EventRepository: CRUD-операции, пагинация и фильтрация событий.
+- IBookingRepository / BookingRepository: Управление бронированиями и выборка заявок со статусом Pending.

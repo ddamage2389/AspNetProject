@@ -1,6 +1,7 @@
 ﻿using AspNetProject.DataAccess;
 using AspNetProject.Exceptions;
 using AspNetProject.Models;
+using AspNetProject.Repositories;
 using AspNetProject.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,9 @@ public class BookingServiceTests : IDisposable
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase(_dbName));
+
+        services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
 
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IBookingService, BookingService>();
