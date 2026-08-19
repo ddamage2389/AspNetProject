@@ -1,7 +1,7 @@
-п»їusing AspNetProject.IntegrationTests.Fixtures;
-using AspNetProject.Models;
-using AspNetProject.Repositories;
+using AspNetProject.IntegrationTests.Fixtures;
+using AspNetProject.Domain.Entities;
 using FluentAssertions;
+using AspNetProject.Infrastructure.Repositories;
 using Xunit;
 
 namespace AspNetProject.IntegrationTests;
@@ -21,7 +21,7 @@ public class BookingRepositoryTests : IntegrationTestBase
     public async Task AddAsync_And_GetByIdAsync_ShouldWork()
     {
         // Arrange
-        var ev = Event.Create("РЎРѕР±С‹С‚РёРµ РґР»СЏ Р±СЂРѕРЅРё", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
+        var ev = Event.Create("Событие для брони", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
         await _eventRepository.AddAsync(ev);
         await _eventRepository.SaveChangesAsync();
 
@@ -43,13 +43,13 @@ public class BookingRepositoryTests : IntegrationTestBase
     public async Task GetPendingBookingIdsAsync_ShouldReturnOnlyPendingBookings()
     {
         // Arrange
-        var ev = Event.Create("РЎРѕР±С‹С‚РёРµ", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
+        var ev = Event.Create("Событие", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
         await _eventRepository.AddAsync(ev);
 
         var pending1 = Booking.CreatePending(ev.Id);
         var pending2 = Booking.CreatePending(ev.Id);
         var confirmed = Booking.CreatePending(ev.Id);
-        confirmed.Confirm(); // РњРµРЅСЏРµРј СЃС‚Р°С‚СѓСЃ
+        confirmed.Confirm(); // Меняем статус
 
         await _bookingRepository.AddAsync(pending1);
         await _bookingRepository.AddAsync(pending2);

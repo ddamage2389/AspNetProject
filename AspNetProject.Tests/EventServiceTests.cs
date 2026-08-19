@@ -1,11 +1,12 @@
-п»їusing AspNetProject.DataAccess;
-using AspNetProject.Exceptions;
-using AspNetProject.Models;
-using AspNetProject.Repositories;
-using AspNetProject.Services;
+using AspNetProject.Infrastructure.DataAccess;
+using AspNetProject.Domain.Exceptions;
+using AspNetProject.Domain.Entities;
+using AspNetProject.Application.Interfaces;
+using AspNetProject.Application.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using AspNetProject.Infrastructure.Repositories;
 using Xunit;
 
 namespace AspNetProject.Tests;
@@ -43,19 +44,19 @@ public class EventServiceTests : IDisposable
         return scope.ServiceProvider.GetRequiredService<IEventService>();
     }
 
-    #region CRUD: РЈСЃРїРµС€РЅС‹Рµ СЃС†РµРЅР°СЂРёРё
+    #region CRUD: Успешные сценарии
 
     [Fact]
     public async Task CreateAsync_ShouldAddEventAndReturnItWithNewId()
     {
         var service = CreateService();
-        var newEvent = Event.Create("РўРµСЃС‚", "РћРїРёСЃР°РЅРёРµ", DateTime.Now, DateTime.Now.AddHours(1), 10);
+        var newEvent = Event.Create("Тест", "Описание", DateTime.Now, DateTime.Now.AddHours(1), 10);
 
         var result = await service.CreateAsync(newEvent);
 
         result.Should().NotBeNull();
         result.Id.Should().NotBe(Guid.Empty);
-        result.Title.Should().Be("РўРµСЃС‚");
+        result.Title.Should().Be("Тест");
         result.TotalSeats.Should().Be(10);
         result.AvailableSeats.Should().Be(10);
     }
@@ -64,8 +65,8 @@ public class EventServiceTests : IDisposable
     public async Task GetAllAsync_ShouldReturnAllCreatedEvents()
     {
         var service = CreateService();
-        await service.CreateAsync(Event.Create("РЎРѕР±С‹С‚РёРµ 1", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
-        await service.CreateAsync(Event.Create("РЎРѕР±С‹С‚РёРµ 2", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Событие 1", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Событие 2", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
         var result = await service.GetAllAsync();
         result.Items.Should().HaveCount(2);
@@ -75,7 +76,7 @@ public class EventServiceTests : IDisposable
     public async Task GetByIdAsync_ShouldReturnEvent_WhenExists()
     {
         var service = CreateService();
-        var created = await service.CreateAsync(Event.Create("РќР°Р№С‚Рё РјРµРЅСЏ", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        var created = await service.CreateAsync(Event.Create("Найти меня", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
         var found = await service.GetByIdAsync(created.Id);
 
@@ -87,23 +88,23 @@ public class EventServiceTests : IDisposable
     public async Task UpdateAsync_ShouldUpdateFields_WhenExists()
     {
         var service = CreateService();
-        var created = await service.CreateAsync(Event.Create("РЎС‚Р°СЂРѕРµ РЅР°Р·РІР°РЅРёРµ", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        var created = await service.CreateAsync(Event.Create("Старое название", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
         var existing = await service.GetByIdAsync(created.Id);
-        existing!.Update("РќРѕРІРѕРµ РЅР°Р·РІР°РЅРёРµ", "РћР±РЅРѕРІР»РµРЅРѕ", created.StartAt, created.EndAt);
+        existing!.Update("Новое название", "Обновлено", created.StartAt, created.EndAt);
 
         var updated = await service.UpdateAsync(created.Id, existing);
 
         updated.Should().NotBeNull();
-        updated.Title.Should().Be("РќРѕРІРѕРµ РЅР°Р·РІР°РЅРёРµ");
-        updated.Description.Should().Be("РћР±РЅРѕРІР»РµРЅРѕ");
+        updated.Title.Should().Be("Новое название");
+        updated.Description.Should().Be("Обновлено");
     }
 
     [Fact]
     public async Task DeleteAsync_ShouldReturnTrueAndRemoveEvent_WhenExists()
     {
         var service = CreateService();
-        var created = await service.CreateAsync(Event.Create("РЈРґР°Р»Рё РјРµРЅСЏ", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        var created = await service.CreateAsync(Event.Create("Удали меня", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
         var deleted = await service.DeleteAsync(created.Id);
         var afterDelete = await service.GetByIdAsync(created.Id);
@@ -114,7 +115,7 @@ public class EventServiceTests : IDisposable
 
     #endregion
 
-    #region CRUD: РќРµСѓСЃРїРµС€РЅС‹Рµ СЃС†РµРЅР°СЂРёРё
+    #region CRUD: Неуспешные сценарии
 
     [Fact]
     public async Task GetByIdAsync_ShouldReturnNull_WhenNotExists()
@@ -145,7 +146,7 @@ public class EventServiceTests : IDisposable
     public async Task UpdateAsync_ShouldThrowException_WhenEndAtIsBeforeStartAt()
     {
         var service = CreateService();
-        var created = await service.CreateAsync(Event.Create("РўРµСЃС‚", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        var created = await service.CreateAsync(Event.Create("Тест", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
         var invalidUpdate = Event.Create("x", "D", DateTime.Now.AddHours(2), DateTime.Now, 10);
 
@@ -156,20 +157,20 @@ public class EventServiceTests : IDisposable
 
     #endregion
 
-    #region Р¤РёР»СЊС‚СЂР°С†РёСЏ Рё РџР°РіРёРЅР°С†РёСЏ
+    #region Фильтрация и Пагинация
 
     [Fact]
     public async Task GetAllAsync_ShouldFilterByTitle_IgnoreCase()
     {
         var service = CreateService();
-        await service.CreateAsync(Event.Create("РњРёС‚Р°Рї РїРѕ C#", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
-        await service.CreateAsync(Event.Create("РљРѕРЅС„РµСЂРµРЅС†РёСЏ", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
-        await service.CreateAsync(Event.Create("РјРёС‚Р°Рї РїРѕ Python", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Митап по C#", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Конференция", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("митап по Python", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
 
-        var result = await service.GetAllAsync(title: "РјРёС‚Р°Рї");
+        var result = await service.GetAllAsync(title: "митап");
 
         result.Items.Should().HaveCount(2);
-        result.Items.All(e => e.Title.Contains("РјРёС‚Р°Рї", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
+        result.Items.All(e => e.Title.Contains("митап", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
     }
 
     [Fact]
@@ -178,14 +179,14 @@ public class EventServiceTests : IDisposable
         var service = CreateService();
         var baseDate = new DateTime(2026, 6, 15, 10, 0, 0);
 
-        await service.CreateAsync(Event.Create("Р Р°РЅРЅРµРµ", "D", baseDate.AddDays(-5), baseDate.AddDays(-4), 10));
-        await service.CreateAsync(Event.Create("Р’ РґРёР°РїР°Р·РѕРЅРµ", "D", baseDate, baseDate.AddHours(2), 10));
-        await service.CreateAsync(Event.Create("РџРѕР·РґРЅРµРµ", "D", baseDate.AddDays(5), baseDate.AddDays(6), 10));
+        await service.CreateAsync(Event.Create("Раннее", "D", baseDate.AddDays(-5), baseDate.AddDays(-4), 10));
+        await service.CreateAsync(Event.Create("В диапазоне", "D", baseDate, baseDate.AddHours(2), 10));
+        await service.CreateAsync(Event.Create("Позднее", "D", baseDate.AddDays(5), baseDate.AddDays(6), 10));
 
         var result = await service.GetAllAsync(from: baseDate, to: baseDate.AddDays(1));
 
         result.Items.Should().HaveCount(1);
-        result.Items.First().Title.Should().Be("Р’ РґРёР°РїР°Р·РѕРЅРµ");
+        result.Items.First().Title.Should().Be("В диапазоне");
     }
 
     [Fact]
@@ -194,7 +195,7 @@ public class EventServiceTests : IDisposable
         var service = CreateService();
         for (int i = 1; i <= 15; i++)
         {
-            await service.CreateAsync(Event.Create($"РЎРѕР±С‹С‚РёРµ {i}", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
+            await service.CreateAsync(Event.Create($"Событие {i}", "D", DateTime.Now, DateTime.Now.AddHours(1), 10));
         }
 
         var result = await service.GetAllAsync(page: 2, pageSize: 5);
@@ -203,7 +204,7 @@ public class EventServiceTests : IDisposable
         result.Page.Should().Be(2);
         result.PageSize.Should().Be(5);
         result.Items.Should().HaveCount(5);
-        result.Items.First().Title.Should().Be("РЎРѕР±С‹С‚РёРµ 6");
+        result.Items.First().Title.Should().Be("Событие 6");
     }
 
     [Fact]
@@ -211,15 +212,15 @@ public class EventServiceTests : IDisposable
     {
         var service = CreateService();
         var date = DateTime.Now;
-        await service.CreateAsync(Event.Create("РњРёС‚Р°Рї 1", "D", date, date.AddHours(1), 10));
-        await service.CreateAsync(Event.Create("РњРёС‚Р°Рї 2", "D", date, date.AddHours(1), 10));
-        await service.CreateAsync(Event.Create("РљРѕРЅС„РµСЂРµРЅС†РёСЏ", "D", date, date.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Митап 1", "D", date, date.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Митап 2", "D", date, date.AddHours(1), 10));
+        await service.CreateAsync(Event.Create("Конференция", "D", date, date.AddHours(1), 10));
 
-        var result = await service.GetAllAsync(title: "РјРёС‚Р°Рї", page: 2, pageSize: 1);
+        var result = await service.GetAllAsync(title: "митап", page: 2, pageSize: 1);
 
         result.TotalCount.Should().Be(2);
         result.Items.Should().HaveCount(1);
-        result.Items.First().Title.Should().Be("РњРёС‚Р°Рї 2");
+        result.Items.First().Title.Should().Be("Митап 2");
     }
 
     #endregion

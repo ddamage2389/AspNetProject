@@ -23,6 +23,19 @@
 	<Compile Remove="AspNetProject.IntegrationTests\**" />
 	<EmbeddedResource Remove="AspNetProject.IntegrationTests\**" />
 	<None Remove="AspNetProject.IntegrationTests\**" />
+
+	<Compile Remove="Domain\**" />
+	<EmbeddedResource Remove="Domain\**" />
+	<None Remove="Domain\**" />
+
+	<Compile Remove="Application\**" />
+	<EmbeddedResource Remove="Application\**" />
+	<None Remove="Application\**" />
+
+	<Compile Remove="Infrastructure\**" />
+	<EmbeddedResource Remove="Infrastructure\**" />
+	<None Remove="Infrastructure\**" />
+
   </ItemGroup>
 
 	<ItemGroup>
@@ -35,9 +48,27 @@
 		<Content Remove="bin\**" />
 		<Content Remove="obj\**" />
 	</ItemGroup>
-	
+
+	<ItemGroup>
+		<ProjectReference Include="Domain\AspNetProject.Domain.csproj" />
+		<ProjectReference Include="Application\AspNetProject.Application.csproj" />
+		<ProjectReference Include="Infrastructure\AspNetProject.Infrastructure.csproj" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<InternalsVisibleTo Include="AspNetProject.Tests" />
 		<InternalsVisibleTo Include="AspNetProject.IntegrationTests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Update="Presentation\appsettings.json">
+			<Link>appsettings.json</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+
+		<Content Update="Presentation\appsettings.Development.json">
+			<Link>appsettings.Development.json</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 </Project>
