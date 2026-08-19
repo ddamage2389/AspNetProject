@@ -1,11 +1,12 @@
-п»їusing AspNetProject.DataAccess;
-using AspNetProject.Exceptions;
-using AspNetProject.Models;
-using AspNetProject.Repositories;
-using AspNetProject.Services;
+using AspNetProject.Infrastructure.DataAccess;
+using AspNetProject.Domain.Exceptions;
+using AspNetProject.Domain.Entities;
+using AspNetProject.Application.Interfaces;
+using AspNetProject.Application.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using AspNetProject.Infrastructure.Repositories;
 using Xunit;
 
 namespace AspNetProject.Tests;
@@ -50,7 +51,7 @@ public class BookingServiceTests : IDisposable
         return @event;
     }
 
-    #region Р‘Р°Р·РѕРІС‹Рµ С‚РµСЃС‚С‹
+    #region Базовые тесты
 
     [Fact]
     public async Task CreateBookingAsync_ShouldReturnBooking_WhenEventExists()
@@ -152,7 +153,7 @@ public class BookingServiceTests : IDisposable
 
     #endregion
 
-    #region РўРµСЃС‚С‹ РЅР° РјРµСЃС‚Р° (Seats) вЂ” РЎРїСЂРёРЅС‚ 4
+    #region Тесты на места (Seats) — Спринт 4
 
     [Fact]
     public async Task CreateBookingAsync_ShouldDecreaseAvailableSeats()
@@ -184,7 +185,7 @@ public class BookingServiceTests : IDisposable
 
     #endregion
 
-    #region РўРµСЃС‚С‹ РЅР° СЃРјРµРЅСѓ СЃС‚Р°С‚СѓСЃР°
+    #region Тесты на смену статуса
 
     [Fact]
     public void Booking_Confirm_ShouldSetStatusAndProcessedAt()
@@ -238,7 +239,7 @@ public class BookingServiceTests : IDisposable
 
     #endregion
 
-    #region РўРµСЃС‚С‹ РЅР° РєРѕРЅРєСѓСЂРµРЅС‚РЅРѕСЃС‚СЊ (Concurrency)
+    #region Тесты на конкурентность (Concurrency)
 
     [Fact]
     public async Task Concurrency_ShouldPreventOverbooking()

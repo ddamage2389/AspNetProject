@@ -1,4 +1,4 @@
-﻿using AspNetProject.DataAccess;
+﻿using AspNetProject.Infrastructure.DataAccess;
 using AspNetProject.IntegrationTests.Fixtures;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

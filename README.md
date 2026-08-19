@@ -6,6 +6,30 @@
 - .NET 10 SDK или выше: [Скачать](https://dotnet.microsoft.com/download)
 - Git
 
+## 🏗 Архитектура проекта (Clean Architecture)
+
+Проект разделён на 4 независимых слоя с чёткими правилами зависимостей:
+
+1. **Domain** (`Domain/`)
+   - **Ответственность:** Доменные сущности, бизнес-правила и доменные исключения.
+   - **Зависимости:** Не имеет внешних зависимостей.
+   - **Содержимое:** `Entities` (Event, Booking), `Exceptions`.
+
+2. **Application** (`Application/`)
+   - **Ответственность:** Бизнес-логика (Use Cases), интерфейсы портов (репозитории, сервисы) и DTO.
+   - **Зависимости:** Зависит только от `Domain`. **Не зависит от Infrastructure.**
+   - **Содержимое:** `Interfaces`, `Services`, `Dtos`.
+
+3. **Infrastructure** (`Infrastructure/`)
+   - **Ответственность:** Реализация портов, доступ к данным, внешние сервисы.
+   - **Зависимости:** Зависит от `Application` и `Domain`.
+   - **Содержимое:** `DataAccess` (AppDbContext, Configurations), `Repositories`, `Migrations`.
+
+4. **Presentation** (`Presentation/`)
+   - **Ответственность:** Точка входа в приложение, HTTP-эндпоинты, Composition Root (DI).
+   - **Зависимости:** Зависит от `Application` и `Infrastructure`.
+   - **Содержимое:** `Controllers`, `Middleware`, `Services` (BackgroundService), `Program.cs`.
+
 ## Установка и запуск
 
 ```bash
@@ -20,7 +44,8 @@ dotnet build
 docker compose -f docker-compose_.yml up -d
 
 # 4. Запустите сервер
-dotnet run
+Для запуска необходимо явно указать проект Presentation, так как он является точкой входа:
+dotnet run --project Presentation\AspNetProject.Presentation.csproj
 
 # 5. Откройте Swagger UI
 https://localhost:xxxx/swagger
