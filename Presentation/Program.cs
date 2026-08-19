@@ -1,25 +1,12 @@
 using AspNetProject.Application.Interfaces;
 using AspNetProject.Application.Services;
-using AspNetProject.Infrastructure;
 using AspNetProject.Infrastructure.DataAccess;
-using AspNetProject.Presentation.Middleware;
-using Microsoft.EntityFrameworkCore;
-using AspNetProject.Presentation.Services;
 using AspNetProject.Infrastructure.Repositories;
+using AspNetProject.Presentation.Middleware;
+using AspNetProject.Presentation.Services;
+using Microsoft.EntityFrameworkCore;
 
-var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-{
-    Args = args,
-    ContentRootPath = AppContext.BaseDirectory
-});
-
-Console.WriteLine(
-    $"ContentRoot: {builder.Environment.ContentRootPath}");
-
-Console.WriteLine(
-    $"Connection string loaded: " +
-    $"{!string.IsNullOrWhiteSpace(
-        builder.Configuration.GetConnectionString("DefaultConnection"))}");
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -28,16 +15,12 @@ builder.Services.AddControllers()
             new System.Text.Json.Serialization.JsonStringEnumConverter()
         );
     });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var connectionString =
-    builder.Configuration.GetConnectionString("DefaultConnection");
-
-Console.WriteLine($"Connection string loaded: {!string.IsNullOrWhiteSpace(connectionString)}");
-
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
@@ -59,9 +42,10 @@ app.UseExceptionHandling();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger();      
+    app.UseSwaggerUI();    
 }
+
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
