@@ -20,8 +20,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <ItemGroup>
-	  <ProjectReference Include="..\AspNetProject.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+		<ProjectReference Include="..\Domain\AspNetProject.Domain.csproj" />
+		<ProjectReference Include="..\Application\AspNetProject.Application.csproj" />
+		<ProjectReference Include="..\Infrastructure\AspNetProject.Infrastructure.csproj" />
+	</ItemGroup>
 
 </Project>

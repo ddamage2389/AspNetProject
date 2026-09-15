@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace AspNetProject.Presentation.Services;
+namespace AspNetProject.Application.Services;
 
 public class BookingProcessingBackgroundService : BackgroundService
 {
@@ -82,10 +82,15 @@ public class BookingProcessingBackgroundService : BackgroundService
             if (booking != null)
             {
                 booking.Reject();
-                var eventItem = await eventRepository.GetByIdAsync(booking.EventId, stoppingToken);
-                eventItem?.ReleaseSeats();
 
-                await eventRepository.UpdateAsync(eventItem);
+                var eventItem = await eventRepository.GetByIdAsync(booking.EventId, stoppingToken);
+
+                if (eventItem != null)
+                {
+                    eventItem.ReleaseSeats();
+                    await eventRepository.UpdateAsync(eventItem);
+                }
+
                 await bookingRepository.SaveChangesAsync(stoppingToken);
             }
         }

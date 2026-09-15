@@ -1,6 +1,5 @@
 ﻿using AspNetProject.Application.Dtos;
 using AspNetProject.Application.Interfaces;
-using AspNetProject.Controllers;
 using AspNetProject.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
@@ -67,12 +66,8 @@ public class EventsController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var existing = await _eventService.GetByIdAsync(id);
-        if (existing == null) return NotFound();
+        var updated = await _eventService.UpdateAsync(id, dto);
 
-        existing.Update(dto.Title, dto.Description, dto.StartAt, dto.EndAt);
-
-        var updated = await _eventService.UpdateAsync(id, existing);
         return updated == null ? NotFound() : Ok(updated);
     }
 
@@ -81,12 +76,6 @@ public class EventsController : ControllerBase
     {
         var deleted = await _eventService.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
-    }
-
-    [HttpGet("test-error")]
-    public IActionResult TestError()
-    {
-        throw new Exception("Это тестовое исключение для проверки middleware");
     }
 
     [HttpPost("{id}/book")]

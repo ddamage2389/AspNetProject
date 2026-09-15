@@ -9,7 +9,6 @@ public sealed class BookingService : IBookingService
     private readonly IEventRepository _eventRepository;
     private readonly IBookingRepository _bookingRepository;
 
-    private static readonly SemaphoreSlim _bookingSemaphore = new(1, 1);
 
     public BookingService(
         IEventRepository eventRepository,
@@ -21,10 +20,7 @@ public sealed class BookingService : IBookingService
 
     public async Task<Booking> CreateBookingAsync(Guid eventId)
     {
-        await _bookingSemaphore.WaitAsync();
 
-        try
-        {
             var existingEvent = await _eventRepository.GetByIdAsync(eventId);
 
             if (existingEvent is null)
@@ -47,11 +43,6 @@ public sealed class BookingService : IBookingService
             await _bookingRepository.SaveChangesAsync();
 
             return booking;
-        }
-        finally
-        {
-            _bookingSemaphore.Release();
-        }
     }
 
     public async Task<Booking?> GetBookingByIdAsync(Guid bookingId)

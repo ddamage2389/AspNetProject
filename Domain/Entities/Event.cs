@@ -19,7 +19,7 @@ public sealed class Event
     public int TotalSeats { get; private set; }
     public int AvailableSeats { get; private set; }
 
-    internal  ICollection<Booking> Bookings { get; private set; }
+    internal ICollection<Booking> Bookings { get; private set; }
 
     /// <summary>
     /// Фабричный метод с валидацией
@@ -40,11 +40,23 @@ public sealed class Event
             Id = Guid.NewGuid(),
             Title = title,
             Description = description,
-            StartAt = startAt,
-            EndAt = endAt,
+            StartAt = EnsureUtc(startAt),
+            EndAt = EnsureUtc(endAt),
             TotalSeats = totalSeats,
             AvailableSeats = totalSeats
         };
+    }
+
+    /// <summary>
+    /// Гарантирует, что DateTime имеет Kind=Utc.
+    /// Если Kind уже Utc — возвращает как есть.
+    /// Если Unspecified или Local — помечает как Utc (без конвертации значения).
+    /// </summary>
+    private static DateTime EnsureUtc(DateTime dateTime)
+    {
+        return dateTime.Kind == DateTimeKind.Utc
+            ? dateTime
+            : DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
     }
 
     /// <summary>
@@ -85,8 +97,8 @@ public sealed class Event
 
         Title = title;
         Description = description;
-        StartAt = startAt;
-        EndAt = endAt;
+        StartAt = EnsureUtc(startAt);
+        EndAt = EnsureUtc(endAt);
     }
 
 }

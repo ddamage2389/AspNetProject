@@ -16,7 +16,7 @@ public interface IEventService
 
     Task<Event> CreateAsync(Event eventItem);
 
-    Task<Event?> UpdateAsync(Guid id, Event eventItem);
+    Task<Event?> UpdateAsync(Guid id, UpdateEventDto dto);
 
     Task<bool> DeleteAsync(Guid id);
 }

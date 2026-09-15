@@ -38,6 +38,12 @@ public class ExceptionHandlingMiddleware
         response.Extensions["traceId"] = context.TraceIdentifier;
         switch (exception)
         {
+            case InvalidEventDatesException dateEx:
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                response.Title = "Ошибка валидации дат";
+                response.Detail = dateEx.Message;
+                response.Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1";
+                break;
             case ArgumentException argEx:
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                 response.Title = "Ошибка валидации";
@@ -45,7 +51,6 @@ public class ExceptionHandlingMiddleware
                 response.Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1";
                 break;
 
-            // 2. ИЗМЕНИ ЭТУ СТРОКУ (убери старый неймспейс)
             case NoAvailableSeatsException:
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict; // 409
                 response.Title = "Нет свободных мест";

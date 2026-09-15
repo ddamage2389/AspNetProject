@@ -1,7 +1,7 @@
 ﻿using AspNetProject.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
-namespace AspNetProject.Controllers;
+namespace AspNetProject.Presentation.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]

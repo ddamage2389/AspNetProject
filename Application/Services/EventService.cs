@@ -41,18 +41,14 @@ public sealed class EventService : IEventService
         return eventItem;
     }
 
-    public async Task<Event?> UpdateAsync(Guid id, Event updatedEvent)
+    public async Task<Event?> UpdateAsync(Guid id, UpdateEventDto dto)
     {
         var existing = await _eventRepository.GetByIdAsync(id);
 
         if (existing is null)
             return null;
 
-        existing.Update(
-            updatedEvent.Title,
-            updatedEvent.Description,
-            updatedEvent.StartAt,
-            updatedEvent.EndAt);
+        existing.Update(dto.Title, dto.Description, dto.StartAt, dto.EndAt);
 
         await _eventRepository.UpdateAsync(existing);
         await _eventRepository.SaveChangesAsync();
