@@ -1,7 +1,8 @@
-﻿using AspNetProject.IntegrationTests.Fixtures;
-using AspNetProject.Domain.Entities;
-using FluentAssertions;
+﻿using AspNetProject.Domain.Entities;
 using AspNetProject.Infrastructure.Repositories;
+using AspNetProject.IntegrationTests.Fixtures;
+using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace AspNetProject.IntegrationTests;
@@ -21,11 +22,15 @@ public class BookingRepositoryTests : IntegrationTestBase
     public async Task AddAsync_And_GetByIdAsync_ShouldWork()
     {
         // Arrange
-        var ev = Event.Create("Событие для брони", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
+        var ev = Event.Create("Событие для брони", "Desc", DateTime.UtcNow.AddHours(1), DateTime.UtcNow.AddHours(2), 10);
         await _eventRepository.AddAsync(ev);
+
+        var user = User.Create("testuser", "password_hash", Role.User);
+        await DbContext.Users.AddAsync(user);
+
         await _eventRepository.SaveChangesAsync();
 
-        var booking = Booking.CreatePending(ev.Id);
+        var booking = Booking.CreatePending(ev.Id, user.Id);
 
         // Act
         await _bookingRepository.AddAsync(booking);
@@ -37,19 +42,24 @@ public class BookingRepositoryTests : IntegrationTestBase
         foundBooking.Should().NotBeNull();
         foundBooking!.Status.Should().Be(BookingStatus.Pending);
         foundBooking.EventId.Should().Be(ev.Id);
+        foundBooking.UserId.Should().Be(user.Id);
     }
 
     [Fact]
     public async Task GetPendingBookingIdsAsync_ShouldReturnOnlyPendingBookings()
     {
         // Arrange
-        var ev = Event.Create("Событие", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), 10);
+        var ev = Event.Create("Событие", "Desc", DateTime.UtcNow.AddHours(1), DateTime.UtcNow.AddHours(2), 10);
         await _eventRepository.AddAsync(ev);
 
-        var pending1 = Booking.CreatePending(ev.Id);
-        var pending2 = Booking.CreatePending(ev.Id);
-        var confirmed = Booking.CreatePending(ev.Id);
-        confirmed.Confirm(); // Меняем статус
+        var user = User.Create("testuser2", "password_hash", Role.User);
+        await DbContext.Users.AddAsync(user);
+        await _eventRepository.SaveChangesAsync();
+
+        var pending1 = Booking.CreatePending(ev.Id, user.Id);
+        var pending2 = Booking.CreatePending(ev.Id, user.Id);
+        var confirmed = Booking.CreatePending(ev.Id, user.Id);
+        confirmed.Confirm(); 
 
         await _bookingRepository.AddAsync(pending1);
         await _bookingRepository.AddAsync(pending2);
