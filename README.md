@@ -6,7 +6,7 @@
 - .NET 10 SDK или выше: [Скачать](https://dotnet.microsoft.com/download)
 - Git
 
-## 🏗 Архитектура проекта (Clean Architecture)
+## Архитектура проекта (Clean Architecture)
 
 Проект разделён на 4 независимых слоя с чёткими правилами зависимостей:
 
