@@ -1,7 +1,9 @@
 ﻿using AspNetProject.Application.Dtos;
 using AspNetProject.Application.Interfaces;
 using AspNetProject.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace AspNetProject.Presentation.Controllers;
 
@@ -43,6 +45,7 @@ public class EventsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Event>> Create([FromBody] CreateEventDto dto)
     {
         if (!dto.IsValidDateRange())
@@ -51,13 +54,15 @@ public class EventsController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var eventItem = Event.Create(dto.Title, dto.Description, dto.StartAt, dto.EndAt, dto.TotalSeats);
+        var eventItem = Event.Create(dto.Title, dto.Description ?? string.Empty, dto.StartAt, dto.EndAt, dto.TotalSeats);
+
 
         var created = await _eventService.CreateAsync(eventItem);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateEventDto dto)
     {
         if (!dto.IsValidDateRange())
@@ -72,6 +77,7 @@ public class EventsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var deleted = await _eventService.DeleteAsync(id);
@@ -79,24 +85,23 @@ public class EventsController : ControllerBase
     }
 
     [HttpPost("{id}/book")]
-    [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateBooking(Guid id)
+    [Authorize]
+    public async Task<IActionResult> CreateBooking(Guid id, CancellationToken cancellationToken)
     {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId))
+        {
+            return Unauthorized(new { message = "Некорректный токен" });
+        }
+
         try
         {
-            var booking = await _bookingService.CreateBookingAsync(id);
-
-            return AcceptedAtAction(
-                nameof(BookingsController.GetBookingById),
-                "Bookings",
-                new { id = booking.Id },
-                booking);
+            var booking = await _bookingService.CreateBookingAsync(id, userId);
+            return Accepted(booking); // 202 Accepted
         }
         catch (KeyNotFoundException)
         {
-            return NotFound();
+            return NotFound(); // 404
         }
     }
 }
