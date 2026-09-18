@@ -1,6 +1,8 @@
 ﻿using AspNetProject.Application.Interfaces;
 using AspNetProject.Domain.Entities;
 using AspNetProject.Domain.Exceptions;
+using AspNetProject.Application.Settings;
+using Microsoft.Extensions.Options;
 
 namespace AspNetProject.Application.Services;
 
@@ -8,11 +10,13 @@ internal sealed class BookingService : IBookingService
 {
     private readonly IEventRepository _eventRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly int _maxActiveBookings;
 
-    public BookingService(IEventRepository eventRepository, IBookingRepository bookingRepository)
+    public BookingService(IEventRepository eventRepository, IBookingRepository bookingRepository, IOptions<BookingSettings> bookingSettings)
     {
         _eventRepository = eventRepository;
         _bookingRepository = bookingRepository;
+        _maxActiveBookings = bookingSettings.Value.MaxActiveBookingsPerUser;
     }
 
     public async Task<Booking> CreateBookingAsync(Guid eventId, Guid userId)
@@ -25,8 +29,11 @@ internal sealed class BookingService : IBookingService
             throw new EventAlreadyStartedException("Нельзя забронировать событие, которое уже началось.");
 
         var activeBookingsCount = await _bookingRepository.GetActiveBookingsCountAsync(userId);
-        if (activeBookingsCount >= 10)
-            throw new BookingLimitExceededException("Превышен лимит активных бронирований (максимум 10).");
+        if (activeBookingsCount >= _maxActiveBookings)
+        {
+            throw new BookingLimitExceededException(
+                $"Превышен лимит активных бронирований (максимум {_maxActiveBookings}).");
+        }
 
         if (!existingEvent.TryReserveSeats(1))
             throw new NoAvailableSeatsException("Нет свободных мест для этого события");
@@ -58,6 +65,12 @@ internal sealed class BookingService : IBookingService
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
             throw new KeyNotFoundException("Бронь не найдена.");
+
+        var eventItem = await _eventRepository.GetByIdAsync(booking.EventId);
+        if (eventItem != null && eventItem.StartAt <= DateTime.UtcNow)
+        {
+            throw new EventAlreadyStartedException("Нельзя отменить бронь на событие, которое уже началось.");
+        }
 
         booking.Cancel(currentUserId, currentUserRole);
 

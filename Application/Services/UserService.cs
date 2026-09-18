@@ -25,10 +25,8 @@ public sealed class UserService : IUserService
             throw new InvalidOperationException("Пользователь с таким логином уже существует.");
         }
 
-        var role = Enum.TryParse<Role>(dto.Role, true, out var parsedRole) ? parsedRole : Role.User;
         var passwordHash = _passwordHasher.Hash(dto.Password);
-
-        var user = User.Create(dto.Login, passwordHash, role);
+        var user = User.Create(dto.Login, passwordHash, Role.User);
 
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);

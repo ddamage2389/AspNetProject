@@ -30,6 +30,11 @@ public class BookingServiceTests : IDisposable
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IBookingService, BookingService>();
 
+        services.Configure<AspNetProject.Application.Settings.BookingSettings>(options =>
+        {
+            options.MaxActiveBookingsPerUser = 10;
+        });
+
         _serviceProvider = services.BuildServiceProvider();
     }
 
@@ -378,6 +383,94 @@ public class BookingServiceTests : IDisposable
         // А вот 11-я бронь для Пользователя 2 уже должна быть заблокирована
         await Assert.ThrowsAsync<BookingLimitExceededException>(() =>
             bookingService.CreateBookingAsync(eventItem.Id, anotherUserId));
+    }
+
+    [Fact]
+    public async Task CancelBookingAsync_ShouldThrow_WhenBookingIsAlreadyCancelled()
+    {
+        // Arrange
+        var eventItem = await CreateTestEventAsync(totalSeats: 10);
+        using var scope = _serviceProvider.CreateScope();
+        var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+
+        var booking = await bookingService.CreateBookingAsync(eventItem.Id, _testUserId);
+
+        // Отменяем первый раз (успешно)
+        await bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.User);
+
+        // Act & Assert: Попытка отменить повторно
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.User));
+    }
+
+    #endregion
+
+    #region Тесты отмены брони (Сценарии авторизации и правил)
+
+    [Fact]
+    public async Task CancelBookingAsync_ShouldSucceed_WhenOwnerCancelsOwnBooking()
+    {
+        var eventItem = await CreateTestEventAsync(10);
+        using var scope = _serviceProvider.CreateScope();
+        var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+
+        var booking = await bookingService.CreateBookingAsync(eventItem.Id, _testUserId);
+
+        await bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.User);
+
+        var cancelled = await bookingService.GetBookingByIdAsync(booking.Id, _testUserId, Role.User);
+        cancelled.Status.Should().Be(BookingStatus.Cancelled);
+    }
+
+    [Fact]
+    public async Task CancelBookingAsync_ShouldThrowUnauthorizedCancellationException_WhenStrangerTriesToCancel()
+    {
+        var eventItem = await CreateTestEventAsync(10);
+        using var scope = _serviceProvider.CreateScope();
+        var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+
+        var strangerId = Guid.NewGuid();
+        var booking = await bookingService.CreateBookingAsync(eventItem.Id, strangerId);
+
+        await Assert.ThrowsAsync<UnauthorizedCancellationException>(() =>
+            bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.User));
+    }
+
+    [Fact]
+    public async Task CancelBookingAsync_ShouldSucceed_WhenAdminCancelsStrangersBooking()
+    {
+        var eventItem = await CreateTestEventAsync(10);
+        using var scope = _serviceProvider.CreateScope();
+        var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+
+        var strangerId = Guid.NewGuid();
+        var booking = await bookingService.CreateBookingAsync(eventItem.Id, strangerId);
+
+        await bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.Admin);
+
+        var cancelled = await bookingService.GetBookingByIdAsync(booking.Id, _testUserId, Role.Admin);
+        cancelled.Status.Should().Be(BookingStatus.Cancelled);
+    }
+
+    [Fact]
+    public async Task CancelBookingAsync_ShouldThrowEventAlreadyStartedException_WhenEventAlreadyStarted()
+    {
+        // Arrange: Создаем событие и бронь
+        var eventItem = await CreateTestEventAsync(10);
+        using var scope = _serviceProvider.CreateScope();
+        var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var booking = await bookingService.CreateBookingAsync(eventItem.Id, _testUserId);
+
+        // Имитируем, что событие уже началось (меняем дату в БД)
+        var dbEvent = await context.Events.FindAsync(eventItem.Id);
+        dbEvent!.StartAt = DateTime.UtcNow.AddHours(-1); // Событие началось час назад
+        await context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<EventAlreadyStartedException>(() =>
+            bookingService.CancelBookingAsync(booking.Id, _testUserId, Role.User));
     }
 
     #endregion

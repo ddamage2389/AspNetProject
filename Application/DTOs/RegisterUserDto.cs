@@ -12,5 +12,4 @@ public class RegisterUserDto
     [StringLength(100, MinimumLength = 6)]
     public string Password { get; set; } = string.Empty;
 
-    public string? Role { get; set; }
 }

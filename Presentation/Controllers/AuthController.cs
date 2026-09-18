@@ -39,8 +39,7 @@ public class AuthController : ControllerBase
         }
         catch (UnauthorizedAccessException)
         {
-            // Защита от перебора: возвращаем 400 с общим сообщением
-            return BadRequest(new { message = "Неверный логин или пароль." });
+            return Unauthorized(new { message = "Неверный логин или пароль." });
         }
     }
 }

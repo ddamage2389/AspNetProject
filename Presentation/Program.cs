@@ -9,6 +9,7 @@ using AspNetProject.Presentation.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using System.Text;
 using Microsoft.OpenApi;
 
@@ -46,6 +47,9 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
+
+builder.Services.Configure<AspNetProject.Application.Settings.BookingSettings>(
+    builder.Configuration.GetSection("BookingSettings"));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -90,3 +94,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

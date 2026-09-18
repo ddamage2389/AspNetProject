@@ -54,7 +54,8 @@ public class EventsController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        var eventItem = Event.Create(dto.Title, dto.Description, dto.StartAt, dto.EndAt, dto.TotalSeats);
+        var eventItem = Event.Create(dto.Title, dto.Description ?? string.Empty, dto.StartAt, dto.EndAt, dto.TotalSeats);
+
 
         var created = await _eventService.CreateAsync(eventItem);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);

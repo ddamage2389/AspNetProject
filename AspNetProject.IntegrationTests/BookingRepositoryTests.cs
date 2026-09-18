@@ -59,7 +59,7 @@ public class BookingRepositoryTests : IntegrationTestBase
         var pending1 = Booking.CreatePending(ev.Id, user.Id);
         var pending2 = Booking.CreatePending(ev.Id, user.Id);
         var confirmed = Booking.CreatePending(ev.Id, user.Id);
-        confirmed.Confirm(); 
+        confirmed.Confirm();
 
         await _bookingRepository.AddAsync(pending1);
         await _bookingRepository.AddAsync(pending2);

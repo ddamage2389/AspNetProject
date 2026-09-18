@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AspNetProject.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260917091648_AddUserAndBookingUserId")]
+    [Migration("20260917185944_AddUserAndBookingUserId")]
     partial class AddUserAndBookingUserId
     {
         /// <inheritdoc />
