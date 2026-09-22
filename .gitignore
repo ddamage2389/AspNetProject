@@ -34,3 +34,7 @@ bld/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local configuration and test artifacts
+.env
+**/TestResults/
