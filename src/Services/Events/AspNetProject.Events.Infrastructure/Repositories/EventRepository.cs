@@ -15,6 +15,16 @@ public sealed class EventRepository : IEventRepository
         _context = context;
     }
 
+    public async Task<IReadOnlyList<Event>> GetTopAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Events.AsNoTracking()
+            .Where(e => e.TotalSeats > 0)
+            .OrderByDescending(e => (double)(e.TotalSeats - e.AvailableSeats) / e.TotalSeats)
+            .ThenBy(e => e.Id)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<PaginatedResult<Event>> GetAllAsync(string? title, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         IQueryable<Event> query = _context.Events;

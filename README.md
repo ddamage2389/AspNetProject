@@ -1,6 +1,6 @@
 # Event Manager API
 
-REST API для управления мероприятиями, реализованный на ASP.NET Core Web API. В спринте 9 монолит разделён на три независимых сервиса: Users/Auth, Events и Bookings. Каждый имеет свою PostgreSQL; взаимодействие между сервисами выполняется асинхронно через Apache Kafka.
+REST API для управления мероприятиями, реализованный на ASP.NET Core Web API. В спринте 9 монолит разделён на три независимых сервиса: Users/Auth, Events и Bookings. Каждый имеет свою PostgreSQL; взаимодействие между сервисами выполняется асинхронно через Apache Kafka. В спринте 10 в Events добавлен Redis: кеширование мероприятия по ID и публичного рейтинга топ-10.
 
 ## Требования
 
@@ -15,7 +15,7 @@ REST API для управления мероприятиями, реализо�
 | Сервис | Где находится код | Ответственность | HTTP / Swagger | Своя PostgreSQL |
 |---|---|---|---|---|
 | Users/Auth | [src/Services/Users](src/Services/Users) | Регистрация, хеширование пароля, вход и выдача JWT | [localhost:5001/swagger](http://localhost:5001/swagger) | `users`, порт хоста 5433 |
-| Events | [src/Services/Events](src/Services/Events) | CRUD мероприятий, учёт мест, получение сообщений Kafka | [localhost:5002/swagger](http://localhost:5002/swagger) | `events`, порт хоста 5434 |
+| Events | [src/Services/Events](src/Services/Events) | CRUD мероприятий, учёт мест, Kafka, кеш Redis и топ-10 | [localhost:5002/swagger](http://localhost:5002/swagger) | `events`, порт хоста 5434 |
 | Bookings | [src/Services/Bookings](src/Services/Bookings) | Создание, подтверждение и отмена броней, отправка сообщений Kafka | [localhost:5003/swagger](http://localhost:5003/swagger) | `bookings`, порт хоста 5435 |
 
 **Users/Auth — один сервис.** Users — название сервиса и папки; Auth — его контроллер и маршруты `/auth/register`, `/auth/login`.
@@ -39,8 +39,6 @@ src/Services/Events/
     Dockerfile
 ```
 
-В [src/Shared/AspNetProject.Contracts](src/Shared/AspNetProject.Contracts) находятся неизменяемые контракты `BookingConfirmed`, `BookingCancelled` и константы топиков. Это библиотека, а не четвёртый сервис: у неё нет HTTP-порта, процесса или базы данных.
-
 Структура репозитория:
 
 ```text
@@ -54,11 +52,12 @@ src/
     AspNetProject.Contracts/
 tests/
   AspNetProject.Sprint9.Tests/
+  AspNetProject.Sprint10.Tests/
 docker-compose.yml
 README.md
 ```
 
-Решение включает 14 проектов: 12 слоёв сервисов, общую библиотеку контрактов и проект тестов. Миграции находятся в Infrastructure каждого сервиса.
+Решение включает 15 проектов: 12 слоёв сервисов, общую библиотеку контрактов и два проекта тестов. Миграции находятся в Infrastructure каждого сервиса.
 
 ## Установка и запуск
 
@@ -66,7 +65,7 @@ README.md
 # 1. Клонируйте репозиторий
 git clone https://github.com/ddamage2389/AspNetProject
 cd AspNetProject
-git switch sprint-9
+git switch sprint-10
 
 # 2. При установленном .NET SDK можно проверить сборку
 dotnet build
@@ -78,7 +77,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Команда Compose запускает восемь компонентов: Users, Events, Bookings, три PostgreSQL, Kafka и Zookeeper. Каждый API применяет свои миграции при запуске. Events создаёт Kafka-топики автоматически.
+Команда Compose запускает девять компонентов: Users, Events, Bookings, три PostgreSQL, Kafka, Zookeeper и Redis. Каждый API применяет свои миграции при запуске. Events создаёт Kafka-топики автоматически.
 
 Swagger доступен на портах 5001, 5002 и 5003 из таблицы выше. В Docker все API слушают порт 8080, но каждый контейнер имеет свой порт на хосте.
 
@@ -93,7 +92,7 @@ docker compose down
 Сначала запустите только инфраструктуру:
 
 ```bash
-docker compose up -d users-db events-db bookings-db zookeeper kafka
+docker compose up -d users-db events-db bookings-db zookeeper kafka redis
 ```
 
 Затем в отдельных терминалах:
@@ -106,7 +105,7 @@ dotnet run --project src/Services/Bookings/AspNetProject.Bookings.Api
 
 Если API уже работают в Compose, освободите их порты командой `docker compose stop users events bookings`. В Visual Studio можно назначить три проекта с окончанием `.Api` запускаемыми проектами решения.
 
-Локальные настройки используют PostgreSQL на 5433–5435 и Kafka на `localhost:9092`. Для создания администратора при локальном запуске Users задайте `SeedAdmin__Login` и `SeedAdmin__Password` в окружении процесса.
+Локальные настройки используют PostgreSQL на 5433–5435, Kafka на `localhost:9092` и Redis на `localhost:6379`. Для создания администратора при локальном запуске Users задайте `SeedAdmin__Login` и `SeedAdmin__Password` в окружении процесса.
 
 ## Краткая документация API
 
@@ -117,6 +116,7 @@ dotnet run --project src/Services/Bookings/AspNetProject.Bookings.Api
 | Users | POST | `/auth/register` | Зарегистрировать пользователя | 204, 400, 409 |
 | Users | POST | `/auth/login` | Получить JWT | 200, 400, 401 |
 | Events | GET | `/events` | Получить события | 200 |
+| Events | GET | `/events/top` | Топ-10 по доле проданных мест, без авторизации | 200 |
 | Events | GET | `/events/{id}` | Получить событие по ID | 200, 404 |
 | Events | POST | `/events` | Создать событие | 201, 400, 401, 403 |
 | Events | PUT | `/events/{id}` | Изменить событие | 200, 400, 401, 403, 404, 409 |
@@ -270,12 +270,93 @@ Producer в Bookings зарегистрирован как singleton, сериа
 
 У Booking нет навигационных свойств к User/Event. Повторная отмена разрешена и не порождает повторный возврат мест.
 
+## Кеширование Redis (спринт 10)
+
+Redis используется только сервисом Events. PostgreSQL остаётся источником данных; Redis хранит временные копии для частых публичных запросов.
+
+| Запрос | Ключ | TTL по умолчанию | Обновление |
+|---|---|---|---|
+| `GET /events/{id}` | `event:{id}` | 60 секунд | Удаление ключа после записи в БД |
+| `GET /events/top` | `events:top10` | 30 секунд | Только истечение TTL |
+
+Оба сценария используют **Cache-Aside**: сначала чтение Redis; при попадании PostgreSQL не вызывается. При промахе сервис читает БД, сохраняет результат с TTL и возвращает его клиенту. Чтение не продлевает TTL. Несуществующее мероприятие не кешируется; пустой топ кешируется, чтобы повторные запросы не нагружали пустую базу.
+
+### Как формируется топ-10
+
+Эндпоинт доступен без JWT и возвращает массив максимум из 10 мероприятий в порядке убывания `(TotalSeats - AvailableSeats) / TotalSeats`. Например, 9 проданных мест из 10 дают более высокий рейтинг, чем 50 из 100. Расчёт использует дробное деление и выполняется в PostgreSQL; при равной доле порядок определяется по Id. Отменённые брони возвращают места и уменьшают долю продаж. Дополнительного фильтра по датам нет.
+
+### Почему выбрана инвалидация
+
+При создании, изменении или удалении мероприятия сначала успешно выполняется `SaveChangesAsync`, затем удаляется `event:{id}`. Изменяющие операции всегда читают актуальную сущность из БД, а не из кеша. После удаления ключа следующий GET загрузит свежие данные.
+
+Такой подход проще обновления копии при каждой записи и подходит для нескольких источников изменений — HTTP и Kafka. Обработчик `BookingConfirmed` удаляет ключ после фиксации транзакции списания мест; `BookingCancelled` — после фиксации возврата. Дубликаты и пропущенные сообщения без изменения мест кеш не затрагивают.
+
+Топ намеренно не инвалидируется при CRUD или бронировании: это рейтинговый виджет, для которого допустим снимок за последние 30 секунд. В течение этого времени он может содержать прежние поля или удалённое мероприятие. Карточка мероприятия чувствительнее к изменениям: её ключ удаляется при записи, а TTL 60 секунд служит дополнительным ограничением устаревания и временем хранения редко читаемых карточек.
+
+### Настройки и отказ Redis
+
+В `Events.Api/appsettings.json`:
+
+```json
+{
+  "Redis": {
+    "ConnectionString": "localhost:6379",
+    "ConnectTimeoutMilliseconds": 1000,
+    "OperationTimeoutMilliseconds": 500
+  },
+  "Cache": {
+    "EventTtlSeconds": 60,
+    "TopEventsTtlSeconds": 30
+  }
+}
+```
+
+В Docker подключение переопределяется через `Redis__ConnectionString=redis:6379`. Значения TTL можно задать через `EVENT_CACHE_TTL_SECONDS` и `TOP_EVENTS_CACHE_TTL_SECONDS` в `.env` (образец — [.env.example](.env.example)); для запуска из IDE используются `Cache__EventTtlSeconds` и `Cache__TopEventsTtlSeconds`. Оба TTL должны быть положительными.
+
+`ICache`, `CacheKeys` и `CacheSettings` находятся в Application. Все имена ключей собраны в `CacheKeys`. Реализация `RedisCache` и пакет StackExchange.Redis находятся в Infrastructure. В Redis сериализуется неизменяемый DTO `EventDetails` с теми же полями, что и ответ API, включая вместимость и остаток мест.
+
+`IConnectionMultiplexer` зарегистрирован как singleton, переиспользуется всеми запросами и освобождается DI при остановке. Настроены `AbortOnConnectFail = false`, короткие таймауты и `BacklogPolicy.FailFast`: клиент восстанавливает соединение в фоне, а команды не накапливаются при отключении. Эти параметры описаны в [документации StackExchange.Redis](https://stackexchange.github.io/StackExchange.Redis/Configuration.html).
+
+Ошибки Redis логируются и не передаются клиенту: чтение считается промахом, запись и удаление кеша пропускаются. Повреждённый JSON также считается промахом. Events может стартовать без Redis; в Compose нет обязательной зависимости Events от готовности Redis, а `/health` проверяет PostgreSQL. Redis имеет собственный healthcheck.
+
+Инвалидация не является общей транзакцией с PostgreSQL. Если процесс завершится после записи в БД или удаление ключа не удастся, старая запись может оставаться до истечения TTL. Обычный Cache-Aside также допускает гонку: параллельное чтение может сохранить старый снимок после удаления ключа. После истечения TTL следующий запрос перечитает БД. Это ограничение выбранной стратегии, а не гарантия строгой согласованности.
+
+Контейнер Redis не сохраняет кеш на диск: после перезапуска он заполняется из PostgreSQL. Имя Compose-проекта `aspnetproject-sprint9` сохранено для использования уже существующих томов БД; это не номер текущей версии приложения.
+
+### Проверка кеша вручную
+
+1. Запустите `docker compose up -d --build`. Откройте [Events Swagger](http://localhost:5002/swagger), создайте мероприятие администратором и выполните GET по его Id.
+2. Проверьте запись и её TTL, подставив Id:
+
+```bash
+docker compose exec redis redis-cli GET event:<id>
+docker compose exec redis redis-cli TTL event:<id>
+```
+
+3. Измените мероприятие через PUT. До следующего GET команда `EXISTS event:<id>` должна вернуть 0. Повторный GET вернёт обновлённые данные и снова создаст ключ. DELETE также удаляет ключ; последующий GET возвращает 404.
+4. Выполните публичный `GET /events/top`. Проверьте `GET events:top10` и `TTL events:top10`. После изменения данных топ может оставаться прежним до 30 секунд; затем запрос перестроит его.
+5. Прогрейте карточку GET-запросом, создайте бронь через Bookings и дождитесь обработки Kafka. Ключ карточки будет удалён после списания мест; следующий GET покажет новый остаток. Повторите для отмены брони.
+6. Проверьте отказ кеша:
+
+```bash
+docker compose stop redis
+docker compose restart events
+```
+
+7. Дождитесь запуска Events. GET по Id, GET топа и CRUD с правами Admin должны работать через PostgreSQL. В `docker compose logs events` появятся предупреждения о Redis, но API не должен возвращать 500 из-за кеша.
+8. Верните Redis командой `docker compose start redis`. После восстановления соединения новые запросы снова заполнят кеш.
+
 ## Запуск тестов
 
-В [tests/AspNetProject.Sprint9.Tests](tests/AspNetProject.Sprint9.Tests) находятся 13 тестов xUnit для сервисов спринта 9. Они проверяют JWT и права доступа, сохранение статуса с outbox, обработку подтверждения и отмены, повторные сообщения, конкурентные изменения и лимит активных броней.
+В [tests/AspNetProject.Sprint9.Tests](tests/AspNetProject.Sprint9.Tests) сохранены интеграционные проверки JWT, прав доступа, outbox, подтверждения и отмены броней. Дополнительно проверяются инвалидация кеша после Kafka-транзакции, публичный топ-10 и сортировка рейтинга в PostgreSQL.
+
+В [tests/AspNetProject.Sprint10.Tests](tests/AspNetProject.Sprint10.Tests) находятся unit-тесты кеширования с заглушками кеша и репозитория. Они проверяют попадание, промах, TTL, пустой рейтинг, отсутствие мероприятия, инвалидацию после записи, отсутствие инвалидации при ошибке БД и сохранение всех полей при JSON-сериализации. Эти тесты не требуют Docker.
 
 ```bash
 dotnet test AspNetProject.sln --configuration Release
+
+# Только unit-тесты кеширования, без Docker
+dotnet test tests/AspNetProject.Sprint10.Tests --configuration Release
 ```
 
 Testcontainers запускает реальный PostgreSQL во временном контейнере с отдельными тестовыми базами. Тесты не используют базы запущенного Compose; временные контейнеры удаляются после выполнения. Доставку через Kafka проверяйте по разделу «Сквозная проверка вручную».
@@ -360,7 +441,7 @@ dotnet ef migrations add ChangeEvents --project src/Services/Events/AspNetProjec
 | Эндпоинт | Доступ |
 |---|---|
 | Users: POST /auth/register, POST /auth/login | Публично |
-| Events: GET /events, GET /events/{id} | Публично |
+| Events: GET /events, GET /events/{id}, GET /events/top | Публично |
 | Events: POST /events, PUT /events/{id}, DELETE /events/{id} | Только Admin |
 | Bookings: POST /bookings | Аутентифицированный пользователь |
 | Bookings: GET /bookings/{id}, DELETE /bookings/{id} | Владелец или Admin |
@@ -401,7 +482,7 @@ dotnet ef migrations add ChangeEvents --project src/Services/Events/AspNetProjec
 
 Каждый содержит два этапа: SDK-образ выполняет restore и publish нужного API с его зависимостями; runtime-образ получает готовые файлы и запускает нужную DLL от пользователя `app` на порту 8080. Базы данных и Kafka эти Dockerfile не запускают.
 
-В корне находится один [docker-compose.yml](docker-compose.yml). Он запускает три API с их Dockerfile, три PostgreSQL, Kafka и Zookeeper; задаёт сеть, постоянные тома, JWT и строки подключения. Для запуска всей системы достаточно `docker compose up -d --build`.
+В корне находится один [docker-compose.yml](docker-compose.yml). Он запускает три API с их Dockerfile, три PostgreSQL, Kafka, Zookeeper и Redis; задаёт сеть, постоянные тома, JWT и строки подключения. Для запуска всей системы достаточно `docker compose up -d --build`.
 
 В основном Compose Kafka имеет внутренний listener `INTERNAL://kafka:29092` и внешний `EXTERNAL://localhost:9092`; оба используют протокол PLAINTEXT. Zookeeper доступен внутри сети по `zookeeper:2181`. Healthcheck инфраструктуры позволяют запускать зависимые контейнеры после её готовности.
 

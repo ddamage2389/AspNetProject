@@ -1,4 +1,5 @@
 using AspNetProject.Events.Application.Dtos;
+using AspNetProject.Events.Application.Caching;
 using AspNetProject.Events.Application.Interfaces;
 using AspNetProject.Events.Domain.Entities;
 
@@ -7,10 +8,14 @@ namespace AspNetProject.Events.Application.Services;
 public sealed class EventService : IEventService
 {
     private readonly IEventRepository _eventRepository;
+    private readonly ICache _cache;
+    private readonly CacheSettings _cacheSettings;
 
-    public EventService(IEventRepository eventRepository)
+    public EventService(IEventRepository eventRepository, ICache cache, CacheSettings cacheSettings)
     {
         _eventRepository = eventRepository;
+        _cache = cache;
+        _cacheSettings = cacheSettings;
     }
 
     public async Task<PaginatedResult<Event>> GetAllAsync(
@@ -28,15 +33,36 @@ public sealed class EventService : IEventService
             pageSize);
     }
 
-    public async Task<Event?> GetByIdAsync(Guid id)
+    public async Task<EventDetails?> GetByIdAsync(Guid id)
     {
-        return await _eventRepository.GetByIdAsync(id);
+        var key = CacheKeys.Event(id);
+        var cached = await _cache.GetAsync<EventDetails>(key);
+        if (cached is not null) return cached;
+
+        var item = await _eventRepository.GetByIdAsync(id);
+        if (item is null) return null;
+
+        var result = EventDetails.From(item);
+        await _cache.SetAsync(key, result, TimeSpan.FromSeconds(_cacheSettings.EventTtlSeconds));
+        return result;
+    }
+
+    public async Task<IReadOnlyList<EventDetails>> GetTopAsync()
+    {
+        var cached = await _cache.GetAsync<EventDetails[]>(CacheKeys.TopEvents);
+        if (cached is not null) return cached;
+
+        var items = await _eventRepository.GetTopAsync();
+        var result = items.Select(EventDetails.From).ToArray();
+        await _cache.SetAsync(CacheKeys.TopEvents, result, TimeSpan.FromSeconds(_cacheSettings.TopEventsTtlSeconds));
+        return result;
     }
 
     public async Task<Event> CreateAsync(Event eventItem)
     {
         await _eventRepository.AddAsync(eventItem);
         await _eventRepository.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKeys.Event(eventItem.Id));
 
         return eventItem;
     }
@@ -52,6 +78,7 @@ public sealed class EventService : IEventService
 
         await _eventRepository.UpdateAsync(existing);
         await _eventRepository.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKeys.Event(id));
 
         return existing;
     }
@@ -65,6 +92,7 @@ public sealed class EventService : IEventService
 
         await _eventRepository.DeleteAsync(id);
         await _eventRepository.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKeys.Event(id));
 
         return true;
     }

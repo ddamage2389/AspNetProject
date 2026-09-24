@@ -9,6 +9,10 @@ using AspNetProject.Users.Domain.Entities;
 using AspNetProject.Users.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using AspNetProject.Events.Application.Caching;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AspNetProject.Sprint9.Tests;
 
@@ -23,6 +27,11 @@ public sealed class ServiceFactory<T>(string connection) : WebApplicationFactory
         builder.UseSetting("JwtSettings:Issuer", "sprint9-tests");
         builder.UseSetting("JwtSettings:Audience", "sprint9-tests");
         builder.UseSetting("JwtSettings:ExpiryMinutes", "60");
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<ICache>();
+            services.AddSingleton<ICache, TestCache>();
+        });
     }
 }
 
@@ -50,6 +59,9 @@ public sealed class ApiTests(DatabaseFixture fixture)
         }
         var adminToken = await Login(users, adminLogin, password);
         var createEvent = new { title = "Integration", startAt = DateTime.UtcNow.AddDays(1), endAt = DateTime.UtcNow.AddDays(2), totalSeats = 10 };
+        var top = await events.GetAsync("/events/top");
+        Assert.Equal(HttpStatusCode.OK, top.StatusCode);
+        Assert.Equal(JsonValueKind.Array, (await top.Content.ReadFromJsonAsync<JsonElement>()).ValueKind);
         Assert.Equal(HttpStatusCode.Unauthorized, (await events.PostAsJsonAsync("/events", createEvent)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await bookings.PostAsJsonAsync("/bookings", new { eventId = Guid.NewGuid(), seats = 1 })).StatusCode);
         events.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

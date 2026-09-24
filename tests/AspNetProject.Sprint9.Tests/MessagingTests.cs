@@ -4,6 +4,7 @@ using AspNetProject.Bookings.Domain;
 using AspNetProject.Bookings.Infrastructure;
 using AspNetProject.Contracts;
 using AspNetProject.Events.Domain.Entities;
+using AspNetProject.Events.Application.Caching;
 using AspNetProject.Events.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,6 +14,7 @@ namespace AspNetProject.Sprint9.Tests;
 [Collection("Sprint9")]
 public sealed class MessagingTests(DatabaseFixture fixture)
 {
+    private readonly TestCache _cache = new();
     private async Task<Event> CreateEvent(int seats)
     {
         await using var db = fixture.Events();
@@ -25,13 +27,13 @@ public sealed class MessagingTests(DatabaseFixture fixture)
     private async Task Confirm(BookingConfirmed message)
     {
         await using var db = fixture.Events();
-        await new BookingMessageHandler(db, NullLogger<BookingMessageHandler>.Instance).HandleAsync(message, default);
+        await new BookingMessageHandler(db, NullLogger<BookingMessageHandler>.Instance, _cache).HandleAsync(message, default);
     }
 
     private async Task Cancel(BookingConfirmed message)
     {
         await using var db = fixture.Events();
-        await new BookingMessageHandler(db, NullLogger<BookingMessageHandler>.Instance).HandleAsync(
+        await new BookingMessageHandler(db, NullLogger<BookingMessageHandler>.Instance, _cache).HandleAsync(
             new BookingCancelled(message.BookingId, message.EventId, message.UserId, message.Seats, DateTime.UtcNow), default);
     }
 
@@ -49,6 +51,7 @@ public sealed class MessagingTests(DatabaseFixture fixture)
         await Confirm(message);
         await Confirm(message);
         Assert.Equal(7, await Seats(item.Id));
+        Assert.Equal(new[] { CacheKeys.Event(item.Id) }, _cache.Removed);
     }
 
     [Theory]
@@ -64,6 +67,8 @@ public sealed class MessagingTests(DatabaseFixture fixture)
         await Cancel(message);
         await Confirm(message);
         Assert.Equal(10, await Seats(item.Id));
+        Assert.Equal(cancellationFirst ? 0 : 2, _cache.Removed.Count);
+        Assert.All(_cache.Removed, key => Assert.Equal(CacheKeys.Event(item.Id), key));
     }
 
     [Fact]
@@ -87,6 +92,25 @@ public sealed class MessagingTests(DatabaseFixture fixture)
         await Confirm(message);
         await using var db = fixture.Events();
         Assert.False((await db.BookingReceipts.SingleAsync(x => x.BookingId == message.BookingId)).Applied);
+        Assert.Empty(_cache.Removed);
+    }
+
+    [Fact]
+    public async Task Kafka_invalidates_event_cache_only_after_database_commit()
+    {
+        var item = await CreateEvent(10);
+        var expectedSeats = 8;
+        _cache.OnRemove = async key =>
+        {
+            Assert.Equal(CacheKeys.Event(item.Id), key);
+            // A different connection can see the change only after the transaction commits.
+            Assert.Equal(expectedSeats, await Seats(item.Id));
+        };
+        var message = new BookingConfirmed(Guid.NewGuid(), item.Id, Guid.NewGuid(), 2, DateTime.UtcNow);
+        await Confirm(message);
+        expectedSeats = 10;
+        await Cancel(message);
+        Assert.Equal(2, _cache.Removed.Count);
     }
 
     [Fact]

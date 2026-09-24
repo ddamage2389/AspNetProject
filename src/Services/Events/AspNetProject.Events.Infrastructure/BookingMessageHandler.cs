@@ -1,13 +1,14 @@
 using System.Data;
 using AspNetProject.Contracts;
 using AspNetProject.Events.Application;
+using AspNetProject.Events.Application.Caching;
 using AspNetProject.Events.Infrastructure.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace AspNetProject.Events.Infrastructure;
 
-public sealed class BookingMessageHandler(EventsDbContext db, ILogger<BookingMessageHandler> logger) : IBookingMessageHandler
+public sealed class BookingMessageHandler(EventsDbContext db, ILogger<BookingMessageHandler> logger, ICache cache) : IBookingMessageHandler
 {
     public async Task HandleAsync(BookingConfirmed message, CancellationToken ct)
     {
@@ -31,6 +32,7 @@ public sealed class BookingMessageHandler(EventsDbContext db, ILogger<BookingMes
                 message.BookingId, message.EventId);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        if (changed == 1) await cache.RemoveAsync(CacheKeys.Event(message.EventId));
     }
 
     public async Task HandleAsync(BookingCancelled message, CancellationToken ct)
@@ -38,6 +40,7 @@ public sealed class BookingMessageHandler(EventsDbContext db, ILogger<BookingMes
         Validate(message.BookingId, message.EventId, message.UserId, message.Seats, message.CancelledAt);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var receipt = await db.BookingReceipts.SingleOrDefaultAsync(x => x.BookingId == message.BookingId, ct);
+        var changed = 0;
         if (receipt is null)
         {
             // Different topics may arrive in either order. Later confirmation must not reserve cancelled seats.
@@ -51,12 +54,13 @@ public sealed class BookingMessageHandler(EventsDbContext db, ILogger<BookingMes
             if (receipt.EventId != message.EventId || receipt.Seats != message.Seats)
                 throw new ArgumentException("Cancellation does not match the original booking.");
             if (receipt.Applied)
-                await db.Events.Where(x => x.Id == receipt.EventId)
+                changed = await db.Events.Where(x => x.Id == receipt.EventId)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.AvailableSeats, x => x.AvailableSeats + receipt.Seats), ct);
             receipt.Cancelled = true;
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        if (changed == 1) await cache.RemoveAsync(CacheKeys.Event(message.EventId));
     }
 
     private static void Validate(Guid bookingId, Guid eventId, Guid userId, int seats, DateTime timestamp)

@@ -12,7 +12,9 @@ public interface IEventService
         int page = 1,
         int pageSize = 10);
 
-    Task<Event?> GetByIdAsync(Guid id);
+    Task<EventDetails?> GetByIdAsync(Guid id);
+
+    Task<IReadOnlyList<EventDetails>> GetTopAsync();
 
     Task<Event> CreateAsync(Event eventItem);
 

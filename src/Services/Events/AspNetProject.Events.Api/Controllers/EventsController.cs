@@ -35,8 +35,15 @@ public class EventsController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Event>> GetById(Guid id)
+    [HttpGet("top")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IReadOnlyList<EventDetails>>> GetTop()
+    {
+        return Ok(await _eventService.GetTopAsync());
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<EventDetails>> GetById(Guid id)
     {
         var eventItem = await _eventService.GetByIdAsync(id);
         return eventItem == null ? NotFound() : Ok(eventItem);

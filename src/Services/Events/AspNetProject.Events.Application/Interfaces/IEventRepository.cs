@@ -5,6 +5,8 @@ namespace AspNetProject.Events.Application.Interfaces;
 
 public interface IEventRepository
 {
+    Task<IReadOnlyList<Event>> GetTopAsync(CancellationToken cancellationToken = default);
+
     Task<PaginatedResult<Event>> GetAllAsync(
         string? title,
         DateTime? from,
