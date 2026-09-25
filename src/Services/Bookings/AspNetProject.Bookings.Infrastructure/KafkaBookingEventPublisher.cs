@@ -3,6 +3,7 @@ using AspNetProject.Bookings.Application;
 using AspNetProject.Contracts;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace AspNetProject.Bookings.Infrastructure;
 
@@ -10,7 +11,7 @@ public sealed class KafkaBookingEventPublisher : IBookingEventPublisher, IDispos
 {
     private readonly IProducer<string, string> _producer;
 
-    public KafkaBookingEventPublisher(IConfiguration configuration)
+    public KafkaBookingEventPublisher(IConfiguration configuration, ILogger<KafkaBookingEventPublisher> logger)
     {
         _producer = new ProducerBuilder<string, string>(new ProducerConfig
         {
@@ -19,7 +20,12 @@ public sealed class KafkaBookingEventPublisher : IBookingEventPublisher, IDispos
             Acks = Acks.All,
             MessageTimeoutMs = 10000,
             AllowAutoCreateTopics = false
-        }).Build();
+        }).SetLogHandler((_, message) =>
+            logger.Log(
+                message.Level <= SyslogLevel.Error ? LogLevel.Error :
+                message.Level <= SyslogLevel.Warning ? LogLevel.Warning : LogLevel.Debug,
+                "Kafka {Facility}: {Message}", message.Facility, message.Message))
+            .Build();
     }
 
     public Task PublishAsync(BookingConfirmed message, CancellationToken ct) =>

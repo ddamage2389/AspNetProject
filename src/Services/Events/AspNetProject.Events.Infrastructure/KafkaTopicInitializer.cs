@@ -14,7 +14,12 @@ public sealed class KafkaTopicInitializer(IConfiguration config, ILogger<KafkaTo
         using var admin = new AdminClientBuilder(new AdminClientConfig
         {
             BootstrapServers = config["Kafka:BootstrapServers"], SocketTimeoutMs = 5000
-        }).Build();
+        }).SetLogHandler((_, message) =>
+            logger.Log(
+                message.Level <= SyslogLevel.Error ? LogLevel.Error :
+                message.Level <= SyslogLevel.Warning ? LogLevel.Warning : LogLevel.Debug,
+                "Kafka {Facility}: {Message}", message.Facility, message.Message))
+            .Build();
         try
         {
             await admin.CreateTopicsAsync(

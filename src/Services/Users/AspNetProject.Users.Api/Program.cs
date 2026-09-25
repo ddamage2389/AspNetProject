@@ -8,8 +8,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Npgsql;
+using AspNetProject.Users.Api;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddObservability();
 builder.Services.AddControllers().AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
@@ -48,6 +50,7 @@ if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))
 {
     await app.Services.InitializeUsersAsync(builder.Configuration);
 }
+app.UseRequestLogging();
 app.Use(async (context, next) =>
 {
     try { await next(context); }
@@ -77,6 +80,7 @@ app.UseSwaggerUI();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapPrometheusScrapingEndpoint().DisableHttpMetrics();
 app.MapGet("/health", async (UsersDbContext db, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 app.Run();

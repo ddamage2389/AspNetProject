@@ -36,7 +36,12 @@ public sealed class BookingEventsConsumer(
                     EnableAutoCommit = false,
                     EnableAutoOffsetStore = false,
                     AllowAutoCreateTopics = false
-                }).Build();
+                }).SetLogHandler((_, message) =>
+                    logger.Log(
+                        message.Level <= SyslogLevel.Error ? LogLevel.Error :
+                        message.Level <= SyslogLevel.Warning ? LogLevel.Warning : LogLevel.Debug,
+                        "Kafka {Facility}: {Message}", message.Facility, message.Message))
+                    .Build();
                 try
                 {
                     consumer.Subscribe(new[] { TopicNames.BookingConfirmed, TopicNames.BookingCancelled });

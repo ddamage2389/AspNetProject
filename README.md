@@ -1,6 +1,6 @@
 # Event Manager API
 
-REST API для управления мероприятиями, реализованный на ASP.NET Core Web API. В спринте 9 монолит разделён на три независимых сервиса: Users/Auth, Events и Bookings. Каждый имеет свою PostgreSQL; взаимодействие между сервисами выполняется асинхронно через Apache Kafka. В спринте 10 в Events добавлен Redis: кеширование мероприятия по ID и публичного рейтинга топ-10.
+REST API для управления мероприятиями, реализованный на ASP.NET Core Web API. В спринте 9 монолит разделён на три независимых сервиса: Users/Auth, Events и Bookings. Каждый имеет свою PostgreSQL; взаимодействие между сервисами выполняется асинхронно через Apache Kafka. В спринте 10 в Events добавлен Redis: кеширование мероприятия по ID и публичного рейтинга топ-10. В спринте 11 во всех трёх API настроены OpenTelemetry, JSON-логи Serilog и мониторинг через Prometheus, Jaeger и Grafana.
 
 ## Требования
 
@@ -53,6 +53,10 @@ src/
 tests/
   AspNetProject.Sprint9.Tests/
   AspNetProject.Sprint10.Tests/
+monitoring/grafana/
+  provisioning/   # Источник данных и загрузка дашборда
+  dashboards/     # JSON дашборда
+prometheus.yml
 docker-compose.yml
 README.md
 ```
@@ -65,7 +69,7 @@ README.md
 # 1. Клонируйте репозиторий
 git clone https://github.com/ddamage2389/AspNetProject
 cd AspNetProject
-git switch sprint-10
+git switch sprint-11
 
 # 2. При установленном .NET SDK можно проверить сборку
 dotnet build
@@ -77,7 +81,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Команда Compose запускает девять компонентов: Users, Events, Bookings, три PostgreSQL, Kafka, Zookeeper и Redis. Каждый API применяет свои миграции при запуске. Events создаёт Kafka-топики автоматически.
+Команда Compose запускает двенадцать компонентов: Users, Events, Bookings, три PostgreSQL, Kafka, Zookeeper, Redis, Prometheus, Jaeger и Grafana. Каждый API применяет свои миграции при запуске. Events создаёт Kafka-топики автоматически.
 
 Swagger доступен на портах 5001, 5002 и 5003 из таблицы выше. В Docker все API слушают порт 8080, но каждый контейнер имеет свой порт на хосте.
 
@@ -92,7 +96,7 @@ docker compose down
 Сначала запустите только инфраструктуру:
 
 ```bash
-docker compose up -d users-db events-db bookings-db zookeeper kafka redis
+docker compose up -d users-db events-db bookings-db zookeeper kafka redis jaeger
 ```
 
 Затем в отдельных терминалах:
@@ -125,6 +129,7 @@ dotnet run --project src/Services/Bookings/AspNetProject.Bookings.Api
 | Bookings | GET | `/bookings/{id}` | Получить свою бронь; Admin — любую | 200, 401, 404 |
 | Bookings | DELETE | `/bookings/{id}` | Отменить бронь | 204, 401, 403, 404, 409 |
 | Каждый API | GET | `/health` | Проверить доступность своей БД | 200, 503 |
+| Каждый API | GET | `/metrics` | Метрики OpenTelemetry в формате Prometheus, без JWT | 200 |
 
 Эндпоинт `GET /events` поддерживает параметры запроса:
 
@@ -346,9 +351,140 @@ docker compose restart events
 7. Дождитесь запуска Events. GET по Id, GET топа и CRUD с правами Admin должны работать через PostgreSQL. В `docker compose logs events` появятся предупреждения о Redis, но API не должен возвращать 500 из-за кеша.
 8. Верните Redis командой `docker compose start redis`. После восстановления соединения новые запросы снова заполнят кеш.
 
+## Наблюдаемость (спринт 11)
+
+OpenTelemetry SDK подключён в Api-проектах Users, Events и Bookings. Регистрация вынесена в `Observability.cs` каждого API: входящие HTTP-запросы, исходящие запросы HttpClient, команды EF Core и метрики рантайма .NET. Бизнес-логика и схема БД от мониторинга не зависят.
+
+### Запуск и адреса
+
+Вся система, включая мониторинг, запускается одной командой из корня:
+
+```bash
+docker compose up -d --build
+```
+
+Если API уже работают в Docker, отдельно поднять мониторинг можно командой `docker compose up -d prometheus jaeger grafana`.
+
+| Инструмент | Адрес с хоста | Назначение |
+|---|---|---|
+| Prometheus | [localhost:9090](http://localhost:9090) | Сбор метрик и выполнение PromQL |
+| Prometheus Targets | [localhost:9090/targets](http://localhost:9090/targets) | Статус опроса трёх сервисов |
+| Jaeger | [localhost:16686](http://localhost:16686) | Поиск и просмотр трейсов |
+| Jaeger OTLP gRPC | localhost:4317 | Приём трейсов, не веб-интерфейс |
+| Grafana | [localhost:3000](http://localhost:3000) | Дашборд метрик |
+| Users /metrics | [localhost:5001/metrics](http://localhost:5001/metrics) | Метрики Users |
+| Events /metrics | [localhost:5002/metrics](http://localhost:5002/metrics) | Метрики Events |
+| Bookings /metrics | [localhost:5003/metrics](http://localhost:5003/metrics) | Метрики Bookings |
+
+Grafana: логин **admin**, пароль **admin** по умолчанию. Пароль задаётся `GRAFANA_ADMIN_PASSWORD` в `.env` при первоначальном создании администратора; изменение переменной не меняет пароль в существующей базе Grafana.
+
+Источник данных Prometheus и дашборд **Event Manager — Service Overview** создаются автоматически через provisioning. Дашборд доступен в папке **Event Manager**, [прямая ссылка](http://localhost:3000/d/event-manager-services). Переключатель **Service** позволяет выбрать Users, Events, Bookings или все три.
+
+Prometheus хранит историю в томе `prometheus-data`, Grafana — в `grafana-data`. Jaeger all-in-one использует память: после перезапуска его история трейсов теряется. Версии контейнеров мониторинга закреплены по примеру задания; это локальный учебный стек.
+
+### Настройки и поток телеметрии
+
+В `appsettings.json` каждого API:
+
+```json
+{
+  "Observability": {
+    "ServiceName": "events-service"
+  },
+  "Otlp": {
+    "Endpoint": "http://localhost:4317",
+    "Enabled": true
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "System": "Warning"
+      }
+    }
+  }
+}
+```
+
+Имена ресурсов: `users-service`, `events-service`, `bookings-service`. В Docker `Otlp__Endpoint=http://jaeger:4317` переопределяет локальный адрес. При необходимости `Otlp__Enabled=false` отключает только экспорт трейсов; метрики и JSON-логи продолжают работать. API не ожидают запуска хранилищ мониторинга; при недоступности Jaeger отправка трейсов может теряться, но бизнес-запросы не зависят от неё.
+
+Поток метрик: **API → /metrics ← Prometheus ← Grafana**. В [prometheus.yml](prometheus.yml) заданы три задания с интервалом 15 секунд: `users:8080`, `events:8080`, `bookings:8080`. Имена `job` соответствуют именам сервисов; метрика `target_info` также содержит `service_name`.
+
+Поток трейсов: **OpenTelemetry → OTLP gRPC → Jaeger**. HTTP-запрос является серверным спаном, команды EF Core внутри него — дочерними SQL-спанами с общим TraceId. Попадание в Redis не создаёт SQL-спан, потому что в этом запросе нет обращения к PostgreSQL. Инструментация HttpClient включена, но межсервисных HTTP-вызовов в приложении нет.
+
+Этот спринт не добавляет передачу trace context через Kafka и Outbox: фоновая обработка не образует единый трейс с исходным HTTP-запросом бронирования. Для неё остаются структурированные логи и отдельно собираемые SQL-спаны.
+
+При запуске API через `dotnet run` Jaeger доступен по локальному порту 4317. Для опроса таких API из контейнера Prometheus замените targets на `host.docker.internal:5001`, `host.docker.internal:5002`, `host.docker.internal:5003` соответственно и перезапустите Prometheus. Поставляемая конфигурация рассчитана на полный запуск через Compose.
+
+### Дашборд и смысл метрик
+
+| Панель | Основа расчёта |
+|---|---|
+| HTTP latency p50 / p95 / p99 | `histogram_quantile` от `rate(http_server_request_duration_seconds_bucket)` |
+| Throughput (RPS) | `rate(http_server_request_duration_seconds_count)` |
+| Server errors, % | Доля ответов 5xx среди всех завершённых запросов |
+| Active requests | `http_server_active_requests` |
+| Client errors, % | Доля ответов 4xx, отдельно от сбоев сервера |
+
+В чек-листе задания встречается `http_server_request_duration_second`; фактическое имя экспортируемой гистограммы — `http_server_request_duration_seconds`, с рядами `_bucket`, `_sum` и `_count`. Дашборд использует именно экспортируемые имена.
+
+Примеры PromQL для Events:
+
+```promql
+sum(rate(http_server_request_duration_seconds_count{job="events-service"}[5m]))
+
+histogram_quantile(0.95,
+  sum by (le) (rate(http_server_request_duration_seconds_bucket{job="events-service"}[5m]))
+)
+
+100 *
+(sum(rate(http_server_request_duration_seconds_count{job="events-service",http_response_status_code=~"5.."}[5m])) or vector(0))
+/
+clamp_min(sum(rate(http_server_request_duration_seconds_count{job="events-service"}[5m])), 0.000000001)
+```
+
+Опрос `/metrics` исключён из HTTP latency/RPS и трейсов; внутренние метрики маршрутизации могут учитывать этот маршрут. Счётчик active requests измеряется до выбора маршрута и может включать сам текущий опрос Prometheus. Метрики GC и thread pool собираются через `AddRuntimeInstrumentation` и доступны в Prometheus.
+
+Дашборд — это снимок настоящей нагрузки: до первых запросов панели могут быть пустыми. После запросов дождитесь минимум двух опросов Prometheus (около 30 секунд). Для спокойной системы 5xx = 0 и active requests = 0 нормальны; короткие запросы могут завершиться между опросами. Latency рассчитывается только по завершённым запросам и оценивается по корзинам гистограммы.
+
+### JSON-логи
+
+Все три API используют Serilog и `CompactJsonFormatter`. Каждая строка приложения — JSON: `@t` содержит время, `@mt` — шаблон сообщения, `@l` — уровень, `@x` — исключение, `SourceContext` — источник и `ServiceName` — сервис. По правилам компактного формата отсутствие `@l` означает Information. HTTP-логи также содержат метод, путь, статус, длительность и RequestId; при активном трейсе доступны `@tr` и `@sp` для сопоставления с Jaeger.
+
+Middleware запросов оборачивает обработчик исключений, поэтому в итоговом логе отражается окончательный HTTP-статус. Предупреждения и ошибки Kafka-клиента также направлены через ILogger. Пароли, JWT, тела запросов и значения SQL-параметров специально не добавляются в телеметрию.
+
+Посмотреть исходные JSON-строки без префиксов Compose:
+
+```bash
+docker compose logs --no-log-prefix --no-color users events bookings
+```
+
+Логи самих Prometheus, Jaeger, PostgreSQL и других сторонних контейнеров имеют формат соответствующего инструмента.
+
+### Ручная проверка
+
+1. Запустите Compose. Откройте Swagger каждого сервиса и выполните запросы: вход в Users, `GET /events`, создание или чтение своей брони в Bookings. Для проверки ошибок клиента попробуйте запрос без JWT или неверный пароль.
+2. Откройте три адреса `/metrics`: должны присутствовать `target_info`, HTTP-гистограмма, active requests и метрики .NET.
+3. В Prometheus → **Status → Targets** все три задания должны быть **UP**. Запрос `up` должен вернуть значение 1 для каждого сервиса.
+4. В Jaeger выберите `users-service`, `events-service` или `bookings-service`, нажмите **Find Traces** и откройте трейс. Для SQL-спанов используйте вход в Users, список мероприятий или авторизованное чтение брони. Чтение карточки из Redis может не содержать SQL.
+5. В Grafana откройте **Event Manager — Service Overview**, выберите сервис и диапазон **Last 15 minutes**. Выполните несколько запросов, подождите 30 секунд и проверьте графики.
+6. Проверьте JSON-логи командой выше. TraceId HTTP-запроса можно найти в Jaeger.
+
+Файлы мониторинга входят в репозиторий:
+
+- [prometheus.yml](prometheus.yml) — три scrape targets;
+- [datasources/prometheus.yml](monitoring/grafana/provisioning/datasources/prometheus.yml) — источник Grafana;
+- [dashboards/services.yml](monitoring/grafana/provisioning/dashboards/services.yml) — загрузка дашборда;
+- [dashboards/services.json](monitoring/grafana/dashboards/services.json) — переносимый JSON дашборда.
+
+Для изменения постоянного дашборда редактируйте JSON в репозитории: provisioning перечитает файл. Привязка к datasource выполнена по стабильному UID `prometheus`.
+
+Используются требуемые заданием [EF Core instrumentation](https://github.com/open-telemetry/opentelemetry-dotnet-contrib/tree/main/src/OpenTelemetry.Instrumentation.EntityFrameworkCore) и [Prometheus exporter](https://github.com/open-telemetry/opentelemetry-dotnet/tree/main/src/OpenTelemetry.Exporter.Prometheus.AspNetCore); эти два пакета распространяются с beta-версией, поэтому их версии явно закреплены в проектах.
+
 ## Запуск тестов
 
-В [tests/AspNetProject.Sprint9.Tests](tests/AspNetProject.Sprint9.Tests) сохранены интеграционные проверки JWT, прав доступа, outbox, подтверждения и отмены броней. Дополнительно проверяются инвалидация кеша после Kafka-транзакции, публичный топ-10 и сортировка рейтинга в PostgreSQL.
+В [tests/AspNetProject.Sprint9.Tests](tests/AspNetProject.Sprint9.Tests) сохранены интеграционные проверки JWT, прав доступа, outbox, подтверждения и отмены броней. Дополнительно проверяются инвалидация кеша после Kafka-транзакции, публичный топ-10 и сортировка рейтинга в PostgreSQL. В `ObservabilityTests` проверяются `/metrics`, имя ресурса, HTTP-спаны с дочерними SQL-спанами и связь HTTP-логов с TraceId/SpanId у всех трёх API; OTLP-отправка в этих тестах отключена, трейсы и логи перехватываются в памяти.
 
 В [tests/AspNetProject.Sprint10.Tests](tests/AspNetProject.Sprint10.Tests) находятся unit-тесты кеширования с заглушками кеша и репозитория. Они проверяют попадание, промах, TTL, пустой рейтинг, отсутствие мероприятия, инвалидацию после записи, отсутствие инвалидации при ошибке БД и сохранение всех полей при JSON-сериализации. Эти тесты не требуют Docker.
 
@@ -482,7 +618,9 @@ dotnet ef migrations add ChangeEvents --project src/Services/Events/AspNetProjec
 
 Каждый содержит два этапа: SDK-образ выполняет restore и publish нужного API с его зависимостями; runtime-образ получает готовые файлы и запускает нужную DLL от пользователя `app` на порту 8080. Базы данных и Kafka эти Dockerfile не запускают.
 
-В корне находится один [docker-compose.yml](docker-compose.yml). Он запускает три API с их Dockerfile, три PostgreSQL, Kafka, Zookeeper и Redis; задаёт сеть, постоянные тома, JWT и строки подключения. Для запуска всей системы достаточно `docker compose up -d --build`.
+В runtime-образах установлена библиотека `libgssapi-krb5-2`, которую использует Npgsql 10. Это устраняет нативное предупреждение о недостающей библиотеке при подключении к PostgreSQL, чтобы вывод приложения оставался в JSON-формате.
+
+В корне находится один [docker-compose.yml](docker-compose.yml). Он запускает три API с их Dockerfile, три PostgreSQL, Kafka, Zookeeper, Redis и стек мониторинга; задаёт сеть, постоянные тома, JWT и строки подключения. Для запуска всей системы достаточно `docker compose up -d --build`.
 
 В основном Compose Kafka имеет внутренний listener `INTERNAL://kafka:29092` и внешний `EXTERNAL://localhost:9092`; оба используют протокол PLAINTEXT. Zookeeper доступен внутри сети по `zookeeper:2181`. Healthcheck инфраструктуры позволяют запускать зависимые контейнеры после её готовности.
 

@@ -22,6 +22,7 @@ public sealed class ServiceFactory<T>(string connection) : WebApplicationFactory
     {
         builder.UseSetting("ConnectionStrings:Database", connection);
         builder.UseSetting("Workers:Enabled", "false");
+        builder.UseSetting("Otlp:Enabled", "false");
         builder.UseSetting("Database:MigrateOnStartup", "false");
         builder.UseSetting("JwtSettings:Secret", "sprint9-tests-shared-jwt-secret-at-least-32-bytes");
         builder.UseSetting("JwtSettings:Issuer", "sprint9-tests");

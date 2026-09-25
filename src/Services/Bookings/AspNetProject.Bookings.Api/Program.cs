@@ -8,8 +8,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Npgsql;
+using AspNetProject.Bookings.Api;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddObservability();
 builder.Services.AddControllers().AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
@@ -49,6 +51,7 @@ if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))
     using var scope = app.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<BookingsDbContext>().Database.MigrateAsync();
 }
+app.UseRequestLogging();
 app.Use(async (context, next) =>
 {
     try { await next(context); }
@@ -78,6 +81,7 @@ app.UseSwaggerUI();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapPrometheusScrapingEndpoint().DisableHttpMetrics();
 app.MapGet("/health", async (BookingsDbContext db, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 app.Run();

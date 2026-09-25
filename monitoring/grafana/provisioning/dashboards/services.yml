@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: Event Manager
+    orgId: 1
+    folder: Event Manager
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards
